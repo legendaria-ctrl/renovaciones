@@ -10,7 +10,10 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   const sheetId = process.env.SHEET_ID;
   const apiKey = process.env.SHEET_API_KEY;
-  const range = process.env.SHEET_RANGE || "A:Z";
+  // Solo hasta la columna P (índice 15, "ciudad"): son las únicas que usa la
+  // app. Traer A:Z pesaba ~5.6MB con las ~23,300 filas del sheet, lo que en
+  // conexiones lentas podía cortar la respuesta a medio camino.
+  const range = process.env.SHEET_RANGE || "A:P";
 
   if (!sheetId || !apiKey) {
     return NextResponse.json({ error: "Falta configurar SHEET_ID o SHEET_API_KEY" }, { status: 500 });

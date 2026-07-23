@@ -15,6 +15,8 @@ const COL = {
   ciudad: 15,
 };
 
+const SESSION_KEY = "renovaciones_sheet_cache_v1";
+
 function parsearMeses(valor: string): number | null {
   const m = (valor || "").trim().match(/^(\d+)\s*Meses?$/i);
   return m ? parseInt(m[1], 10) : null;
@@ -29,15 +31,56 @@ function parsearNumeroFila(valor: string | undefined): number | null {
 let cache: SheetLead[] | null = null;
 let cacheEnCurso: Promise<SheetLead[]> | null = null;
 
+function leerCacheSesion(): SheetLead[] | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.sessionStorage.getItem(SESSION_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as (Omit<SheetLead, "fechaInscripcion" | "vencimientoSinergetico" | "vencimientoLive"> & {
+      fechaInscripcion: string;
+      vencimientoSinergetico: string;
+      vencimientoLive: string | null;
+    })[];
+    return parsed.map((l) => ({
+      ...l,
+      fechaInscripcion: new Date(l.fechaInscripcion),
+      vencimientoSinergetico: new Date(l.vencimientoSinergetico),
+      vencimientoLive: l.vencimientoLive ? new Date(l.vencimientoLive) : null,
+    }));
+  } catch {
+    return null;
+  }
+}
+
+function guardarCacheSesion(leads: SheetLead[]) {
+  if (typeof window === "undefined") return;
+  try {
+    window.sessionStorage.setItem(SESSION_KEY, JSON.stringify(leads));
+  } catch {
+    // sessionStorage lleno o no disponible (modo privado, etc.): no es crítico,
+    // simplemente no persiste entre recargas y se vuelve a pedir al sheet.
+  }
+}
+
 /**
  * Lee el sheet completo vía la API de Google Sheets y lo mantiene en memoria
- * durante la sesión del navegador. El sheet ES la fuente de verdad para los
- * datos del lead — nunca se copian a Firestore, así se evita por completo la
- * cuota de escritura diaria (20K/día en el plan gratuito) que antes se
- * agotaba al importar los ~23,000 leads de una sola vez.
+ * (y en sessionStorage, para no volver a pedir varios MB en cada recarga de
+ * página dentro de la misma pestaña). El sheet ES la fuente de verdad para
+ * los datos del lead — nunca se copian a Firestore, así se evita por
+ * completo la cuota de escritura diaria (20K/día en el plan gratuito) que
+ * antes se agotaba al importar los ~23,000 leads de una sola vez.
  */
 export async function obtenerLeadsDelSheet(forzar = false): Promise<SheetLead[]> {
   if (cache && !forzar) return cache;
+
+  if (!forzar) {
+    const deSesion = leerCacheSesion();
+    if (deSesion) {
+      cache = deSesion;
+      return deSesion;
+    }
+  }
+
   if (cacheEnCurso && !forzar) return cacheEnCurso;
 
   cacheEnCurso = (async () => {
@@ -84,6 +127,7 @@ export async function obtenerLeadsDelSheet(forzar = false): Promise<SheetLead[]>
     }
 
     cache = leads;
+    guardarCacheSesion(leads);
     return leads;
   })();
 
@@ -96,4 +140,11 @@ export async function obtenerLeadsDelSheet(forzar = false): Promise<SheetLead[]>
 
 export function limpiarCacheSheet() {
   cache = null;
+  if (typeof window !== "undefined") {
+    try {
+      window.sessionStorage.removeItem(SESSION_KEY);
+    } catch {
+      // no crítico
+    }
+  }
 }

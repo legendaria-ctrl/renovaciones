@@ -21,6 +21,7 @@ export default function LeadDetallePage() {
   const [lead, setLead] = useState<Lead | null>(null);
   const [notas, setNotas] = useState<NotaLead[]>([]);
   const [cargando, setCargando] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [accionAbierta, setAccionAbierta] = useState<null | "ABONO" | "NOTA">(null);
   const [texto, setTexto] = useState("");
   const [monto, setMonto] = useState(0);
@@ -28,10 +29,16 @@ export default function LeadDetallePage() {
 
   const cargar = useCallback(async () => {
     setCargando(true);
-    const [l, n] = await Promise.all([obtenerLead(id), listarNotasLead(id)]);
-    setLead(l);
-    setNotas(n);
-    setCargando(false);
+    setError(null);
+    try {
+      const [l, n] = await Promise.all([obtenerLead(id), listarNotasLead(id)]);
+      setLead(l);
+      setNotas(n);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No se pudo cargar el lead.");
+    } finally {
+      setCargando(false);
+    }
   }, [id]);
 
   useEffect(() => {
@@ -89,7 +96,20 @@ export default function LeadDetallePage() {
   }
 
   if (cargando) return <p className="py-8 text-center text-sm text-muted">Cargando…</p>;
-  if (!lead) return <p className="py-8 text-center text-sm text-muted">Lead no encontrado.</p>;
+  if (error) {
+    return (
+      <div className="flex flex-col items-center gap-3 py-8 text-center">
+        <p className="text-sm text-danger">{error}</p>
+        <button
+          onClick={cargar}
+          className="rounded-xl bg-primary px-4 py-2 text-sm font-medium text-white"
+        >
+          Reintentar
+        </button>
+      </div>
+    );
+  }
+  if (!lead) return <p className="py-8 text-center text-sm text-muted">Lead no encontrado (id: {id}).</p>;
 
   const vencSinergetico = aFecha(lead.vencimientoSinergetico);
   const vencLive = aFecha(lead.vencimientoLive);
