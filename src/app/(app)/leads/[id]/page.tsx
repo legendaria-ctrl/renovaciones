@@ -43,7 +43,7 @@ export default function LeadDetallePage() {
     setEnviando(true);
     await registrarAccionLead({
       leadId: lead.id,
-      autorId: usuario.uid,
+      autorId: usuario.id,
       autorNombre: usuario.nombre,
       tipo: ACCIONES_LEAD[tipo],
       texto: ACCION_LABEL[ACCIONES_LEAD[tipo]],
@@ -57,7 +57,7 @@ export default function LeadDetallePage() {
     setEnviando(true);
     await registrarAccionLead({
       leadId: lead.id,
-      autorId: usuario.uid,
+      autorId: usuario.id,
       autorNombre: usuario.nombre,
       tipo: ACCIONES_LEAD.NOTA,
       texto: texto.trim(),
@@ -74,7 +74,7 @@ export default function LeadDetallePage() {
     await crearSolicitudAbono({
       leadId: lead.id,
       leadNombre: lead.nombre,
-      vendedorId: usuario.uid,
+      vendedorId: usuario.id,
       vendedorNombre: usuario.nombre,
       monto,
       tipoMembresia: lead.liveMeses ? MEMBRESIA_LABEL.LIVE : MEMBRESIA_LABEL.SINERGETICO,

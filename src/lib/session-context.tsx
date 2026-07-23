@@ -1,75 +1,63 @@
 "use client";
 
 import { createContext, useContext, useEffect, useState, useCallback } from "react";
-import { onAuthStateChanged, signOut, User } from "firebase/auth";
 import { doc, onSnapshot } from "firebase/firestore";
-import { auth, db } from "./firebase";
-import { Rol } from "./constants";
+import { db } from "./firebase";
+import { ESTADOS_SOLICITUD, Rol } from "./constants";
 
-export type Usuario = {
-  uid: string;
-  nombre: string;
-  correo: string;
-  rol: Rol;
-  activo: boolean;
-} | null;
+export type Sesion = { id: string; nombre: string; rol: Rol } | null;
 
 type SessionContextValue = {
-  usuario: Usuario;
-  firebaseUser: User | null;
+  usuario: Sesion;
   cargando: boolean;
-  cerrarSesion: () => Promise<void>;
+  refrescar: () => Promise<void>;
+  establecerSesion: (sesion: Sesion) => void;
+  cerrarSesion: (motivo?: string) => Promise<void>;
 };
 
 const SessionContext = createContext<SessionContextValue | null>(null);
 
 export function SessionProvider({ children }: { children: React.ReactNode }) {
-  const [firebaseUser, setFirebaseUser] = useState<User | null>(null);
-  const [usuario, setUsuario] = useState<Usuario>(null);
+  const [usuario, setUsuario] = useState<Sesion>(null);
   const [cargando, setCargando] = useState(true);
 
+  const refrescar = useCallback(async () => {
+    const res = await fetch("/api/session");
+    const data = await res.json();
+    setUsuario(data.session);
+    setCargando(false);
+  }, []);
+
+  const establecerSesion = useCallback((nueva: Sesion) => {
+    setUsuario(nueva);
+    setCargando(false);
+  }, []);
+
+  const cerrarSesion = useCallback(async (motivo?: string) => {
+    await fetch("/api/session", { method: "DELETE" });
+    setUsuario(null);
+    window.location.href = motivo ? `/login?motivo=${motivo}` : "/login";
+  }, []);
+
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, (user) => {
-      setFirebaseUser(user);
-      if (!user) {
-        setUsuario(null);
-        setCargando(false);
+    refrescar();
+  }, [refrescar]);
+
+  // Corta el acceso al instante si le revocan el acceso, sin esperar a que
+  // expire la cookie. Un único documento pequeño: barato de escuchar.
+  useEffect(() => {
+    if (!usuario) return;
+    const unsub = onSnapshot(doc(db, "usuarios", usuario.id), (snap) => {
+      const estado = snap.data()?.estado;
+      if (snap.exists() && estado !== ESTADOS_SOLICITUD.APROBADO) {
+        cerrarSesion("revocado");
       }
     });
     return () => unsub();
-  }, []);
-
-  // Documento de perfil (rol, nombre, activo) en Firestore, uno por usuario.
-  // Se escucha en vivo porque es un único doc pequeño: permite revocar acceso
-  // al instante si un admin desactiva a alguien, sin gastar lecturas de listas.
-  useEffect(() => {
-    if (!firebaseUser) return;
-    setCargando(true);
-    const unsub = onSnapshot(doc(db, "usuarios", firebaseUser.uid), (snap) => {
-      const data = snap.data();
-      if (!data || data.activo === false) {
-        setUsuario(null);
-      } else {
-        setUsuario({
-          uid: firebaseUser.uid,
-          nombre: data.nombre ?? firebaseUser.email ?? "",
-          correo: data.correo ?? firebaseUser.email ?? "",
-          rol: data.rol,
-          activo: true,
-        });
-      }
-      setCargando(false);
-    });
-    return () => unsub();
-  }, [firebaseUser]);
-
-  const cerrarSesion = useCallback(async () => {
-    await signOut(auth);
-    window.location.href = "/login";
-  }, []);
+  }, [usuario, cerrarSesion]);
 
   return (
-    <SessionContext.Provider value={{ usuario, firebaseUser, cargando, cerrarSesion }}>
+    <SessionContext.Provider value={{ usuario, cargando, refrescar, establecerSesion, cerrarSesion }}>
       {children}
     </SessionContext.Provider>
   );

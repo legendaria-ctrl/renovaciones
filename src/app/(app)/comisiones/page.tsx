@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { listarUsuarios, actualizarComision } from "@/lib/vendedoresService";
-import { ROLES, MEMBRESIA_LABEL, TIPOS_MEMBRESIA } from "@/lib/constants";
+import { ROLES, ROL_LABEL, ESTADOS_SOLICITUD, MEMBRESIA_LABEL, TIPOS_MEMBRESIA } from "@/lib/constants";
 import { Usuario } from "@/lib/types";
 
 export default function ComisionesPage() {
@@ -13,7 +13,11 @@ export default function ComisionesPage() {
   const cargar = useCallback(async () => {
     setCargando(true);
     const todos = await listarUsuarios();
-    setUsuarios(todos.filter((u) => u.rol === ROLES.VENDEDOR || u.rol === ROLES.COORDINADOR));
+    setUsuarios(
+      todos.filter(
+        (u) => (u.rol === ROLES.VENDEDOR || u.rol === ROLES.COORDINADOR) && u.estado === ESTADOS_SOLICITUD.APROBADO
+      )
+    );
     setCargando(false);
   }, []);
 
@@ -44,7 +48,7 @@ export default function ComisionesPage() {
               <div key={u.id} className="flex flex-wrap items-center justify-between gap-4 py-4">
                 <div>
                   <p className="text-sm font-medium text-foreground">{u.nombre}</p>
-                  <p className="text-xs text-muted">{u.correo}</p>
+                  <p className="text-xs text-muted">{ROL_LABEL[u.rol]}</p>
                 </div>
                 <div className="flex flex-wrap gap-3">
                   {Object.values(TIPOS_MEMBRESIA).map((tipo) => (

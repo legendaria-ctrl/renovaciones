@@ -33,13 +33,14 @@ export type NotaLead = {
 };
 
 export type Usuario = {
-  id: string;
+  id: string; // ver vendedoresService.idPara: prefijo de rol + nombre normalizado
   nombre: string;
-  correo: string;
   rol: Rol;
-  activo: boolean;
+  estado: EstadoSolicitud;
   comisionPorTipo?: Record<string, number>;
   creadoEn: Timestamp;
+  decididoPor?: string | null;
+  decididoEn?: Timestamp | null;
 };
 
 export type SolicitudAbono = {

@@ -1,23 +1,22 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { UserPlus } from "lucide-react";
+import { UserPlus, Check, X } from "lucide-react";
 import {
   listarUsuarios,
-  crearUsuario,
-  actualizarRol,
-  activarDesactivarUsuario,
+  crearUsuarioAprobado,
+  decidirSolicitud,
 } from "@/lib/vendedoresService";
-import { ROLES, ROL_LABEL, Rol } from "@/lib/constants";
+import { useSesion } from "@/lib/session-context";
+import { ROLES, ROL_LABEL, ESTADOS_SOLICITUD, Rol } from "@/lib/constants";
 import { Usuario } from "@/lib/types";
 
 export default function VendedoresPage() {
+  const { usuario } = useSesion();
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
   const [cargando, setCargando] = useState(true);
   const [formAbierto, setFormAbierto] = useState(false);
   const [nombre, setNombre] = useState("");
-  const [correo, setCorreo] = useState("");
-  const [clave, setClave] = useState("");
   const [rol, setRol] = useState<Rol>(ROLES.VENDEDOR);
   const [error, setError] = useState<string | null>(null);
   const [guardando, setGuardando] = useState(false);
@@ -34,21 +33,26 @@ export default function VendedoresPage() {
 
   async function crear(e: React.FormEvent) {
     e.preventDefault();
+    if (!usuario) return;
     setError(null);
     setGuardando(true);
     try {
-      await crearUsuario({ nombre, correo, clave, rol });
+      await crearUsuarioAprobado(nombre, rol, usuario.nombre);
       setNombre("");
-      setCorreo("");
-      setClave("");
       setRol(ROLES.VENDEDOR);
       setFormAbierto(false);
       await cargar();
-    } catch {
-      setError("No se pudo crear el usuario. Verifica el correo y que la contraseña tenga al menos 6 caracteres.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No se pudo crear el usuario.");
     } finally {
       setGuardando(false);
     }
+  }
+
+  async function resolver(u: Usuario, estado: "APROBADO" | "RECHAZADO") {
+    if (!usuario) return;
+    await decidirSolicitud(u.id, estado, usuario.nombre);
+    cargar();
   }
 
   return (
@@ -69,26 +73,10 @@ export default function VendedoresPage() {
           <div className="core grid grid-cols-1 gap-3 rounded-[calc(1.75rem-0.5rem)] p-6 sm:grid-cols-2">
             <input
               required
-              placeholder="Nombre"
+              placeholder="Nombre (el mismo que usará para iniciar sesión)"
               value={nombre}
               onChange={(e) => setNombre(e.target.value)}
-              className="rounded-xl border border-silver-deep/60 bg-surface-2 px-4 py-2.5 text-sm outline-none"
-            />
-            <input
-              required
-              type="email"
-              placeholder="Correo"
-              value={correo}
-              onChange={(e) => setCorreo(e.target.value)}
-              className="rounded-xl border border-silver-deep/60 bg-surface-2 px-4 py-2.5 text-sm outline-none"
-            />
-            <input
-              required
-              type="password"
-              placeholder="Contraseña temporal"
-              value={clave}
-              onChange={(e) => setClave(e.target.value)}
-              className="rounded-xl border border-silver-deep/60 bg-surface-2 px-4 py-2.5 text-sm outline-none"
+              className="rounded-xl border border-silver-deep/60 bg-surface-2 px-4 py-2.5 text-sm outline-none sm:col-span-2"
             />
             <select
               value={rol}
@@ -105,7 +93,7 @@ export default function VendedoresPage() {
               disabled={guardando}
               className="sm:col-span-2 rounded-xl bg-primary py-2.5 text-sm font-medium text-white disabled:opacity-50"
             >
-              {guardando ? "Creando…" : "Crear usuario"}
+              {guardando ? "Creando…" : "Crear usuario (queda aprobado directo)"}
             </button>
           </div>
         </form>
@@ -120,26 +108,40 @@ export default function VendedoresPage() {
               <div key={u.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
                 <div>
                   <p className="text-sm font-medium text-foreground">{u.nombre}</p>
-                  <p className="text-xs text-muted">{u.correo}</p>
+                  <p className="text-xs text-muted">{ROL_LABEL[u.rol]}</p>
                 </div>
                 <div className="flex items-center gap-2">
-                  <select
-                    value={u.rol}
-                    onChange={(e) => actualizarRol(u.id, e.target.value as Rol).then(cargar)}
-                    className="rounded-xl border border-silver-deep/60 bg-surface-2 px-3 py-2 text-sm outline-none"
-                  >
-                    <option value={ROLES.VENDEDOR}>{ROL_LABEL.VENDEDOR}</option>
-                    <option value={ROLES.COORDINADOR}>{ROL_LABEL.COORDINADOR}</option>
-                    <option value={ROLES.ADMIN}>{ROL_LABEL.ADMIN}</option>
-                  </select>
-                  <button
-                    onClick={() => activarDesactivarUsuario(u.id, !u.activo).then(cargar)}
-                    className={`rounded-xl px-3 py-2 text-sm font-medium transition-all duration-500 ease-spring active:scale-[0.98] ${
-                      u.activo ? "bg-success/10 text-success" : "bg-surface-2 text-muted"
-                    }`}
-                  >
-                    {u.activo ? "Activo" : "Inactivo"}
-                  </button>
+                  {u.estado === ESTADOS_SOLICITUD.PENDIENTE ? (
+                    <>
+                      <button
+                        onClick={() => resolver(u, "APROBADO")}
+                        className="flex items-center gap-1.5 rounded-xl bg-success/10 px-3 py-2 text-sm font-medium text-success"
+                      >
+                        <Check className="h-4 w-4" strokeWidth={1.75} />
+                        Aprobar
+                      </button>
+                      <button
+                        onClick={() => resolver(u, "RECHAZADO")}
+                        className="flex items-center gap-1.5 rounded-xl bg-danger/10 px-3 py-2 text-sm font-medium text-danger"
+                      >
+                        <X className="h-4 w-4" strokeWidth={1.75} />
+                        Rechazar
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      onClick={() =>
+                        resolver(u, u.estado === ESTADOS_SOLICITUD.APROBADO ? "RECHAZADO" : "APROBADO")
+                      }
+                      className={`rounded-xl px-3 py-2 text-sm font-medium transition-all duration-500 ease-spring active:scale-[0.98] ${
+                        u.estado === ESTADOS_SOLICITUD.APROBADO
+                          ? "bg-success/10 text-success"
+                          : "bg-surface-2 text-muted"
+                      }`}
+                    >
+                      {u.estado === ESTADOS_SOLICITUD.APROBADO ? "Aprobado" : "Revocado"}
+                    </button>
+                  )}
                 </div>
               </div>
             ))

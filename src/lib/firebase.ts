@@ -1,5 +1,4 @@
 import { initializeApp, getApps, getApp } from "firebase/app";
-import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 
 // Placeholders válidos para que el build de Next (que intenta prerenderizar
@@ -15,5 +14,4 @@ const firebaseConfig = {
 };
 
 export const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
-export const auth = getAuth(app);
 export const db = getFirestore(app);

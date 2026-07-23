@@ -28,7 +28,7 @@ export default function PendientesPage() {
   async function resolver(solicitud: SolicitudAbono, aprobar: boolean) {
     if (!usuario) return;
     setProcesando(solicitud.id);
-    await resolverSolicitud(solicitud, aprobar, usuario.uid, usuario.nombre);
+    await resolverSolicitud(solicitud, aprobar, usuario.id, usuario.nombre);
     setProcesando(null);
     await cargar();
     await refrescar();

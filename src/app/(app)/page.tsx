@@ -49,7 +49,7 @@ export default function LeadsPage() {
     const { leads: nuevos } = await listarLeads({
       membresia,
       estado,
-      vendedorId: usuario?.rol === ROLES.VENDEDOR ? usuario.uid : null,
+      vendedorId: usuario?.rol === ROLES.VENDEDOR ? usuario.id : null,
     });
     setLeads(nuevos);
     setCargando(false);
