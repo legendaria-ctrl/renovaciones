@@ -1,5 +1,5 @@
 import { Timestamp } from "firebase/firestore";
-import { AccionLead, EstadoSolicitud, Rol } from "./constants";
+import { AccionLead, EstadoLlamada, EstadoSolicitud, Rol } from "./constants";
 
 /** Datos del lead tal como vienen del sheet (fuente de verdad, nunca se copian a Firestore). */
 export type SheetLead = {
@@ -20,6 +20,7 @@ export type SheetLead = {
 export type LeadOverlay = {
   vendedorId: string | null;
   noContactar: boolean;
+  llamada: EstadoLlamada | null;
   creadoEn?: Timestamp;
   actualizadoEn?: Timestamp;
 };

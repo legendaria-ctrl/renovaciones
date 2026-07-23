@@ -1,7 +1,7 @@
 import { collection, doc, query, orderBy, getDocs, updateDoc, addDoc, Timestamp, writeBatch } from "firebase/firestore";
 import { db } from "./firebase";
 import { Lead, NotaLead, SheetLead, LeadOverlay } from "./types";
-import { ACCIONES_LEAD, AccionLead } from "./constants";
+import { ACCIONES_LEAD, ACCION_LABEL, LLAMADA_LABEL, AccionLead, EstadoLlamada } from "./constants";
 import { obtenerLeadsDelSheet } from "./sheetService";
 import { obtenerOverlays, obtenerOverlay, asegurarOverlay, limpiarCacheOverlays, OVERLAY_VACIO } from "./overlayService";
 
@@ -21,11 +21,12 @@ export type FiltrosLeads = {
   pagina?: number;
 };
 
+function combinarLead(s: SheetLead, o: LeadOverlay): Lead {
+  return { ...s, vendedorId: o.vendedorId ?? null, noContactar: o.noContactar ?? false, llamada: o.llamada ?? null };
+}
+
 function combinarConOverlay(sheetLeads: SheetLead[], overlays: Map<string, LeadOverlay>): Lead[] {
-  return sheetLeads.map((s) => {
-    const o = overlays.get(s.id) ?? OVERLAY_VACIO;
-    return { ...s, vendedorId: o.vendedorId ?? null, noContactar: o.noContactar ?? false };
-  });
+  return sheetLeads.map((s) => combinarLead(s, overlays.get(s.id) ?? OVERLAY_VACIO));
 }
 
 /**
@@ -104,8 +105,7 @@ export async function obtenerLead(id: string): Promise<Lead | null> {
   const [sheetLeads, overlay] = await Promise.all([obtenerLeadsDelSheet(), obtenerOverlay(id)]);
   const base = sheetLeads.find((l) => l.id === id);
   if (!base) return null;
-  const o = overlay ?? OVERLAY_VACIO;
-  return { ...base, vendedorId: o.vendedorId ?? null, noContactar: o.noContactar ?? false };
+  return combinarLead(base, overlay ?? OVERLAY_VACIO);
 }
 
 export async function listarNotasLead(leadId: string): Promise<NotaLead[]> {
@@ -138,6 +138,25 @@ export async function registrarAccionLead(params: {
   }
   // "Pagó/Renovó" ya no recalcula fechas: el sheet sigue siendo la fuente de
   // verdad de la fecha de inscripción; la renovación se refleja allá.
+}
+
+export async function actualizarLlamada(
+  leadId: string,
+  estado: EstadoLlamada,
+  autorId: string,
+  autorNombre: string
+) {
+  const ref = await asegurarOverlay(leadId);
+  await updateDoc(ref, { llamada: estado, actualizadoEn: Timestamp.now() });
+  await addDoc(collection(db, "leads", leadId, NOTAS), {
+    leadId,
+    autorId,
+    autorNombre,
+    tipo: ACCIONES_LEAD.LLAMADA,
+    texto: `${ACCION_LABEL.LLAMADA}: ${LLAMADA_LABEL[estado]}`,
+    monto: null,
+    creadoEn: Timestamp.now(),
+  });
 }
 
 export async function asignarLeadsEnLote(leadIds: string[], vendedorIds: string[], cantidadPorVendedor: number) {

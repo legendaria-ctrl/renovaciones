@@ -59,6 +59,7 @@ export const ACCIONES_LEAD = {
   ABONO: "ABONO",
   NO_CONTACTAR: "NO_CONTACTAR",
   NOTA: "NOTA",
+  LLAMADA: "LLAMADA",
   ASIGNACION: "ASIGNACION",
   REASIGNACION: "REASIGNACION",
   IMPORTACION: "IMPORTACION",
@@ -72,11 +73,28 @@ export const ACCION_LABEL: Record<AccionLead, string> = {
   ABONO: "Dio abono",
   NO_CONTACTAR: "No quiere ser contactado",
   NOTA: "Nota",
+  LLAMADA: "Seguimiento de llamada",
   ASIGNACION: "Lead asignado",
   REASIGNACION: "Lead reasignado",
   IMPORTACION: "Importado del sheet",
   APROBACION: "Abono aprobado",
   RECHAZO: "Abono rechazado",
+};
+
+// Estado de seguimiento telefónico del lead, igual que el CRM hermano.
+export const ESTADOS_LLAMADA = {
+  SI: "SI",
+  NO_CONTESTO: "NO_CONTESTO",
+  NO: "NO",
+  PROGRAMADA: "PROGRAMADA",
+} as const;
+export type EstadoLlamada = (typeof ESTADOS_LLAMADA)[keyof typeof ESTADOS_LLAMADA];
+
+export const LLAMADA_LABEL: Record<EstadoLlamada, string> = {
+  SI: "Contestó",
+  NO_CONTESTO: "No contestó",
+  NO: "No llamado",
+  PROGRAMADA: "Llamada programada",
 };
 
 export const ESTADOS_SOLICITUD = {
