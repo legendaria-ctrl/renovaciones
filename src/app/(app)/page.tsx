@@ -213,7 +213,7 @@ export default function LeadsPage() {
                       />
                     )}
                     <button
-                      onClick={() => !seleccionActiva && router.push(`/leads/${lead.id}`)}
+                      onClick={() => !seleccionActiva && router.push(`/leads/${encodeURIComponent(lead.id)}`)}
                       className="flex min-w-0 flex-1 items-center justify-between gap-3 text-left"
                     >
                       <div className="min-w-0">
