@@ -46,7 +46,19 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Clave de acceso incorrecta" }, { status: 401 });
   }
 
-  const estadoSolicitud = await verificarOCrearSolicitud(nombre.trim(), rol);
+  let estadoSolicitud;
+  try {
+    estadoSolicitud = await verificarOCrearSolicitud(nombre.trim(), rol);
+  } catch (err) {
+    console.error("Fallo al leer/crear el usuario en Firestore:", err);
+    const detalle = err instanceof Error ? err.message : String(err);
+    return NextResponse.json(
+      {
+        error: `No se pudo conectar con la base de datos (${detalle}). Revisa las variables NEXT_PUBLIC_FIREBASE_* y que las reglas de Firestore estén publicadas.`,
+      },
+      { status: 500 }
+    );
+  }
 
   if (estadoSolicitud === ESTADOS_SOLICITUD.PENDIENTE) {
     return NextResponse.json(
