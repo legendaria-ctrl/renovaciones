@@ -1,25 +1,31 @@
 import { Timestamp } from "firebase/firestore";
 import { AccionLead, EstadoSolicitud, Rol } from "./constants";
 
-export type Lead = {
-  id: string;
-  numeroSheet: number; // columna # del sheet origen, usado para el import incremental
+/** Datos del lead tal como vienen del sheet (fuente de verdad, nunca se copian a Firestore). */
+export type SheetLead = {
+  id: string; // clave de identidad: correo o últimos 10 dígitos del teléfono
+  numeroSheet: number | null;
   nombre: string;
-  nombreLower: string;
   correo: string | null;
   telefono: string | null;
-  telefonoClave: string | null; // últimos 10 dígitos, para búsqueda/identidad
   pais: string | null;
   ciudad: string | null;
-  fechaInscripcion: Timestamp;
+  fechaInscripcion: Date;
   liveMeses: number | null; // columna J: 3, 6 o 12; null si nunca compró Live
-  vencimientoSinergetico: Timestamp; // fechaInscripcion + 1 año, fijo desde el import
-  vencimientoLive: Timestamp | null; // fechaInscripcion + liveMeses, fijo desde el import
+  vencimientoSinergetico: Date; // fechaInscripcion + 1 año
+  vencimientoLive: Date | null; // fechaInscripcion + liveMeses
+};
+
+/** Lo único que vive en Firestore por lead: solo existe si alguien lo tocó. */
+export type LeadOverlay = {
   vendedorId: string | null;
   noContactar: boolean;
-  creadoEn: Timestamp;
-  actualizadoEn: Timestamp;
+  creadoEn?: Timestamp;
+  actualizadoEn?: Timestamp;
 };
+
+/** Lead combinado para la UI: datos del sheet + overlay de Firestore (si existe). */
+export type Lead = SheetLead & LeadOverlay;
 
 export type NotaLead = {
   id: string;
@@ -57,9 +63,4 @@ export type SolicitudAbono = {
   resueltoPorId?: string;
   resueltoPorNombre?: string;
   resueltoEn?: Timestamp;
-};
-
-export type ImportState = {
-  filasProcesadas: number;
-  actualizadoEn: Timestamp;
 };

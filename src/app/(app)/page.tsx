@@ -14,6 +14,8 @@ import {
 } from "@/lib/leadsService";
 import { listarVendedoresActivos } from "@/lib/vendedoresService";
 import { estadoDesdeVencimiento, aFecha } from "@/lib/membership";
+import { limpiarCacheSheet } from "@/lib/sheetService";
+import { limpiarCacheOverlays } from "@/lib/overlayService";
 import { Lead, Usuario } from "@/lib/types";
 import { StatusBadge } from "@/components/StatusBadge";
 import { AsignarLeadsModal } from "@/components/AsignarLeadsModal";
@@ -37,27 +39,46 @@ export default function LeadsPage() {
   const [seleccionados, setSeleccionados] = useState<Set<string>>(new Set());
   const [modalAbierto, setModalAbierto] = useState(false);
   const [vendedores, setVendedores] = useState<Usuario[]>([]);
+  const [pagina, setPagina] = useState(0);
+  const [hayMas, setHayMas] = useState(false);
+  const [total, setTotal] = useState(0);
 
   const cargar = useCallback(async () => {
     setCargando(true);
     if (busqueda.trim()) {
       const res = await buscarLeads(busqueda);
       setLeads(res);
+      setHayMas(false);
+      setTotal(res.length);
       setCargando(false);
       return;
     }
-    const { leads: nuevos } = await listarLeads({
+    const res = await listarLeads({
       membresia,
       estado,
       vendedorId: usuario?.rol === ROLES.VENDEDOR ? usuario.id : null,
+      pagina,
     });
-    setLeads(nuevos);
+    setLeads(res.leads);
+    setHayMas(res.hayMas);
+    setTotal(res.total);
     setCargando(false);
-  }, [membresia, estado, busqueda, usuario]);
+  }, [membresia, estado, busqueda, usuario, pagina]);
+
+  useEffect(() => {
+    setPagina(0);
+  }, [membresia, estado, busqueda]);
 
   useEffect(() => {
     cargar();
   }, [cargar]);
+
+  async function refrescarDesdeOrigen() {
+    limpiarCacheSheet();
+    limpiarCacheOverlays();
+    setPagina(0);
+    await cargar();
+  }
 
   useEffect(() => {
     if (puedeAsignar(usuario?.rol)) {
@@ -90,8 +111,8 @@ export default function LeadsPage() {
         <h1 className="text-xl font-semibold tracking-tight text-foreground">Leads</h1>
         <div className="flex items-center gap-2">
           <button
-            onClick={cargar}
-            title="Refrescar"
+            onClick={refrescarDesdeOrigen}
+            title="Refrescar desde el sheet"
             className="flex h-10 w-10 items-center justify-center rounded-xl border border-silver-deep/60 bg-surface-2 text-muted transition-all duration-500 ease-spring hover:text-foreground active:scale-[0.98]"
           >
             <RefreshCw className="h-4 w-4" strokeWidth={1.75} />
@@ -211,6 +232,30 @@ export default function LeadsPage() {
               })
             )}
           </div>
+
+          {!busqueda && (leads.length > 0 || pagina > 0) && (
+            <div className="flex items-center justify-between pt-2 text-xs text-muted">
+              <span>{total.toLocaleString("es-MX")} leads con estos filtros</span>
+              <div className="flex gap-2">
+                {pagina > 0 && (
+                  <button
+                    onClick={() => setPagina((p) => Math.max(0, p - 1))}
+                    className="rounded-lg border border-silver-deep/60 bg-surface-2 px-3 py-1.5 font-medium text-foreground"
+                  >
+                    Anterior
+                  </button>
+                )}
+                {hayMas && (
+                  <button
+                    onClick={() => setPagina((p) => p + 1)}
+                    className="rounded-lg border border-silver-deep/60 bg-surface-2 px-3 py-1.5 font-medium text-foreground"
+                  >
+                    Siguiente
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       </div>
 

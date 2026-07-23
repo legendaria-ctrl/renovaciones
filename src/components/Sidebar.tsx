@@ -13,7 +13,7 @@ import {
   Hourglass,
   LogOut,
   X,
-  UploadCloud,
+  RefreshCw,
   BadgeDollarSign,
   BarChart3,
 } from "lucide-react";
@@ -26,7 +26,7 @@ const linksAdmin = [
   { href: "/vendedores", label: "Equipo", icon: Users },
   { href: "/comisiones", label: "Comisiones", icon: BadgeDollarSign },
   { href: "/reportes", label: "Reportes", icon: BarChart3 },
-  { href: "/importar", label: "Importar leads", icon: UploadCloud },
+  { href: "/importar", label: "Actualizar datos", icon: RefreshCw },
 ];
 
 export function Sidebar() {

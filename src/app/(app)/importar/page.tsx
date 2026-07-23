@@ -1,19 +1,23 @@
 "use client";
 
 import { useState } from "react";
-import { UploadCloud, LoaderCircle } from "lucide-react";
-import { actualizarLeadsNuevos, ResultadoImportacion } from "@/lib/importService";
+import { RefreshCw, LoaderCircle } from "lucide-react";
+import { obtenerLeadsDelSheet, limpiarCacheSheet } from "@/lib/sheetService";
+import { obtenerOverlays, limpiarCacheOverlays } from "@/lib/overlayService";
 
 export default function ImportarPage() {
   const [cargando, setCargando] = useState(false);
-  const [resultado, setResultado] = useState<ResultadoImportacion | null>(null);
+  const [total, setTotal] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   async function actualizar() {
     setCargando(true);
     setError(null);
     try {
-      setResultado(await actualizarLeadsNuevos());
+      limpiarCacheSheet();
+      limpiarCacheOverlays();
+      const [leads] = await Promise.all([obtenerLeadsDelSheet(true), obtenerOverlays(true)]);
+      setTotal(leads.length);
     } catch (err) {
       setError(err instanceof Error ? err.message : "No se pudo leer el sheet.");
     } finally {
@@ -23,14 +27,15 @@ export default function ImportarPage() {
 
   return (
     <div className="flex flex-col gap-5">
-      <h1 className="text-xl font-semibold tracking-tight text-foreground">Importar leads</h1>
+      <h1 className="text-xl font-semibold tracking-tight text-foreground">Actualizar datos</h1>
 
       <div className="shell rounded-[1.75rem] p-2 diffused">
         <div className="core flex flex-col items-start gap-4 rounded-[calc(1.75rem-0.5rem)] p-6">
           <p className="text-sm text-muted">
-            Lee el sheet de origen vía la API de Google Sheets y trae solo las filas nuevas desde
-            la última importación (el sheet es de solo-inserción al final). No vuelve a leer ni
-            sobrescribir lo ya importado.
+            Los leads se leen en vivo desde el Google Sheet — no se copian a la base de datos, así
+            que no hay límite de escrituras que agotar. Este botón solo refresca la caché del
+            navegador (útil si acabas de agregar filas nuevas al sheet y quieres verlas de una vez,
+            sin esperar a que expire la caché por su cuenta).
           </p>
 
           <button
@@ -41,29 +46,14 @@ export default function ImportarPage() {
             {cargando ? (
               <LoaderCircle className="h-4 w-4 animate-spin" strokeWidth={1.75} />
             ) : (
-              <UploadCloud className="h-4 w-4" strokeWidth={1.75} />
+              <RefreshCw className="h-4 w-4" strokeWidth={1.75} />
             )}
-            {cargando ? "Actualizando…" : "Actualizar leads nuevos"}
+            {cargando ? "Actualizando…" : "Actualizar desde el sheet"}
           </button>
 
-          {resultado && (
-            <div
-              className={`rounded-2xl px-4 py-3 text-sm ${
-                resultado.limiteAlcanzado ? "bg-warning/10 text-warning" : "bg-surface-2 text-foreground"
-              }`}
-            >
-              {resultado.limiteAlcanzado ? (
-                <>
-                  Se importaron {resultado.nuevos} leads y se llegó al límite diario gratuito de
-                  Firestore (20,000 escrituras/día). El progreso quedó guardado — vuelve a presionar
-                  &quot;Actualizar leads nuevos&quot; después de que se reinicie la cuota (medianoche,
-                  hora del Pacífico) para traer el resto.
-                </>
-              ) : resultado.sinCambios ? (
-                "No hay leads nuevos, el sheet no ha cambiado desde la última vez."
-              ) : (
-                `Se importaron ${resultado.nuevos} leads nuevos (${resultado.filasProcesadas} filas procesadas en total).`
-              )}
+          {total !== null && (
+            <div className="rounded-2xl bg-surface-2 px-4 py-3 text-sm text-foreground">
+              {total.toLocaleString("es-MX")} leads leídos del sheet.
             </div>
           )}
           {error && <p className="text-sm text-danger">{error}</p>}

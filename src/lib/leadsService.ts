@@ -1,28 +1,12 @@
-import {
-  collection,
-  query,
-  where,
-  orderBy,
-  limit,
-  startAfter,
-  getDocs,
-  getDoc,
-  doc,
-  updateDoc,
-  addDoc,
-  Timestamp,
-  QueryDocumentSnapshot,
-  DocumentData,
-  writeBatch,
-} from "firebase/firestore";
+import { collection, doc, query, orderBy, getDocs, updateDoc, addDoc, Timestamp, writeBatch } from "firebase/firestore";
 import { db } from "./firebase";
-import { Lead, NotaLead } from "./types";
+import { Lead, NotaLead, SheetLead, LeadOverlay } from "./types";
 import { ACCIONES_LEAD, AccionLead } from "./constants";
-import { vencimientoSinergetico, vencimientoLive } from "./membership";
-import { LIVE_MESES_VALIDOS } from "./constants";
+import { obtenerLeadsDelSheet } from "./sheetService";
+import { obtenerOverlays, obtenerOverlay, asegurarOverlay, limpiarCacheOverlays, OVERLAY_VACIO } from "./overlayService";
 
-const LEADS = "leads";
 const NOTAS = "notas";
+const PAGE_SIZE = 30;
 
 export type FiltroMembresia = "TODOS" | "SINERGETICO" | "LIVE";
 export type FiltroEstado = "TODOS" | "ACTIVO" | "VENCIDO";
@@ -32,105 +16,100 @@ export type FiltrosLeads = {
   estado: FiltroEstado;
   vendedorId?: string | null;
   soloSinAsignar?: boolean;
-  vencidoDesde?: Date | null; // filtro "vencidos desde tal fecha hasta tal fecha"
+  vencidoDesde?: Date | null;
   vencidoHasta?: Date | null;
+  pagina?: number;
 };
 
-const PAGE_SIZE = 30;
-
-/**
- * Trae una página de leads según filtros. Usa los campos precalculados
- * vencimientoSinergetico/vencimientoLive (fijos desde el import) para poder
- * filtrar por vencido/activo con un where de rango, sin tener que recalcular
- * ni releer todo el dataset en cada carga.
- */
-export async function listarLeads(
-  filtros: FiltrosLeads,
-  cursor?: QueryDocumentSnapshot<DocumentData> | null
-) {
-  const campoVencimiento =
-    filtros.membresia === "LIVE" ? "vencimientoLive" : "vencimientoSinergetico";
-
-  const clauses = [] as ReturnType<typeof where>[];
-
-  if (filtros.membresia === "LIVE") {
-    // "in" en vez de un rango: Firestore solo permite filtros de rango (<, <=, >, >=)
-    // sobre un único campo por consulta, y ya usamos uno para el vencimiento.
-    clauses.push(where("liveMeses", "in", LIVE_MESES_VALIDOS));
-  }
-
-  if (filtros.vendedorId) {
-    clauses.push(where("vendedorId", "==", filtros.vendedorId));
-  }
-  if (filtros.soloSinAsignar) {
-    clauses.push(where("vendedorId", "==", null));
-  }
-
-  const ahora = Timestamp.now();
-  if (filtros.estado === "VENCIDO") {
-    clauses.push(where(campoVencimiento, "<=", filtros.vencidoHasta ? Timestamp.fromDate(filtros.vencidoHasta) : ahora));
-    if (filtros.vencidoDesde) {
-      clauses.push(where(campoVencimiento, ">=", Timestamp.fromDate(filtros.vencidoDesde)));
-    }
-  } else if (filtros.estado === "ACTIVO") {
-    clauses.push(where(campoVencimiento, ">", ahora));
-  }
-
-  const base = query(
-    collection(db, LEADS),
-    ...clauses,
-    orderBy(campoVencimiento, filtros.estado === "ACTIVO" ? "asc" : "desc"),
-    ...(cursor ? [startAfter(cursor)] : []),
-    limit(PAGE_SIZE)
-  );
-
-  const snap = await getDocs(base);
-  return {
-    leads: snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Lead),
-    cursor: snap.docs.at(-1) ?? null,
-    hayMas: snap.docs.length === PAGE_SIZE,
-  };
+function combinarConOverlay(sheetLeads: SheetLead[], overlays: Map<string, LeadOverlay>): Lead[] {
+  return sheetLeads.map((s) => {
+    const o = overlays.get(s.id) ?? OVERLAY_VACIO;
+    return { ...s, vendedorId: o.vendedorId ?? null, noContactar: o.noContactar ?? false };
+  });
 }
 
-/** Búsqueda puntual por correo exacto, teléfono (últimos 10 dígitos) o prefijo de nombre. */
+/**
+ * Filtra/busca/pagina en memoria a partir del sheet (cacheado) + overlay de
+ * Firestore (cacheado). Sin queries de Firestore por página: todo el costo
+ * ya se pagó al cargar ambas cachés una vez.
+ */
+export async function listarLeads(filtros: FiltrosLeads) {
+  const [sheetLeads, overlays] = await Promise.all([obtenerLeadsDelSheet(), obtenerOverlays()]);
+  let leads: Lead[] = combinarConOverlay(sheetLeads, overlays);
+
+  if (filtros.membresia === "LIVE") {
+    leads = leads.filter((l) => l.liveMeses != null);
+  }
+
+  if (filtros.soloSinAsignar) {
+    leads = leads.filter((l) => !l.vendedorId);
+  } else if (filtros.vendedorId) {
+    leads = leads.filter((l) => l.vendedorId === filtros.vendedorId);
+  }
+
+  const ahora = new Date();
+  const campoVencimiento = filtros.membresia === "LIVE" ? "vencimientoLive" : "vencimientoSinergetico";
+
+  if (filtros.estado === "VENCIDO") {
+    leads = leads.filter((l) => {
+      const v = l[campoVencimiento];
+      if (!v) return false;
+      if (v >= ahora) return false;
+      if (filtros.vencidoDesde && v < filtros.vencidoDesde) return false;
+      if (filtros.vencidoHasta && v > filtros.vencidoHasta) return false;
+      return true;
+    });
+  } else if (filtros.estado === "ACTIVO") {
+    leads = leads.filter((l) => {
+      const v = l[campoVencimiento];
+      return v ? v >= ahora : false;
+    });
+  }
+
+  leads.sort((a, b) => {
+    const va = (a[campoVencimiento] ?? new Date(0)).getTime();
+    const vb = (b[campoVencimiento] ?? new Date(0)).getTime();
+    return filtros.estado === "ACTIVO" ? va - vb : vb - va;
+  });
+
+  const pagina = filtros.pagina ?? 0;
+  const inicio = pagina * PAGE_SIZE;
+  const pageItems = leads.slice(inicio, inicio + PAGE_SIZE);
+
+  return { leads: pageItems, hayMas: leads.length > inicio + PAGE_SIZE, total: leads.length };
+}
+
+/** Búsqueda por correo, teléfono (últimos dígitos) o nombre — todo en memoria. */
 export async function buscarLeads(termino: string): Promise<Lead[]> {
-  const valor = termino.trim();
+  const valor = termino.trim().toLowerCase();
   if (!valor) return [];
 
-  if (valor.includes("@")) {
-    const snap = await getDocs(query(collection(db, LEADS), where("correo", "==", valor.toLowerCase()), limit(20)));
-    return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Lead);
-  }
+  const [sheetLeads, overlays] = await Promise.all([obtenerLeadsDelSheet(), obtenerOverlays()]);
+  const leads = combinarConOverlay(sheetLeads, overlays);
 
   const soloDigitos = valor.replace(/\D/g, "");
-  if (soloDigitos.length >= 7) {
-    const clave = soloDigitos.slice(-10);
-    const snap = await getDocs(query(collection(db, LEADS), where("telefonoClave", "==", clave), limit(20)));
-    return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Lead);
-  }
+  const porTelefono = soloDigitos.length >= 7;
 
-  const prefijo = valor.toLowerCase();
-  const snap = await getDocs(
-    query(
-      collection(db, LEADS),
-      orderBy("nombreLower"),
-      where("nombreLower", ">=", prefijo),
-      where("nombreLower", "<", prefijo + ""),
-      limit(20)
-    )
-  );
-  return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Lead);
+  return leads
+    .filter((l) => {
+      if (l.correo?.toLowerCase().includes(valor)) return true;
+      if (l.nombre.toLowerCase().includes(valor)) return true;
+      if (porTelefono && l.telefono?.replace(/\D/g, "").includes(soloDigitos)) return true;
+      return false;
+    })
+    .slice(0, 30);
 }
 
 export async function obtenerLead(id: string): Promise<Lead | null> {
-  const snap = await getDoc(doc(db, LEADS, id));
-  return snap.exists() ? ({ id: snap.id, ...snap.data() } as Lead) : null;
+  const [sheetLeads, overlay] = await Promise.all([obtenerLeadsDelSheet(), obtenerOverlay(id)]);
+  const base = sheetLeads.find((l) => l.id === id);
+  if (!base) return null;
+  const o = overlay ?? OVERLAY_VACIO;
+  return { ...base, vendedorId: o.vendedorId ?? null, noContactar: o.noContactar ?? false };
 }
 
 export async function listarNotasLead(leadId: string): Promise<NotaLead[]> {
-  const snap = await getDocs(
-    query(collection(db, LEADS, leadId, NOTAS), orderBy("creadoEn", "desc"))
-  );
+  const snap = await getDocs(query(collection(db, "leads", leadId, NOTAS), orderBy("creadoEn", "desc")));
   return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as NotaLead);
 }
 
@@ -142,7 +121,9 @@ export async function registrarAccionLead(params: {
   texto: string;
   monto?: number;
 }) {
-  await addDoc(collection(db, LEADS, params.leadId, NOTAS), {
+  const ref = await asegurarOverlay(params.leadId);
+
+  await addDoc(collection(db, "leads", params.leadId, NOTAS), {
     leadId: params.leadId,
     autorId: params.autorId,
     autorNombre: params.autorNombre,
@@ -153,54 +134,36 @@ export async function registrarAccionLead(params: {
   });
 
   if (params.tipo === ACCIONES_LEAD.NO_CONTACTAR) {
-    await updateDoc(doc(db, LEADS, params.leadId), {
-      noContactar: true,
-      actualizadoEn: Timestamp.now(),
-    });
+    await updateDoc(ref, { noContactar: true, actualizadoEn: Timestamp.now() });
   }
-
-  if (params.tipo === ACCIONES_LEAD.PAGO) {
-    // Renovación confirmada: recalcula vencimientos desde hoy.
-    const lead = await obtenerLead(params.leadId);
-    if (lead) {
-      const hoy = new Date();
-      await updateDoc(doc(db, LEADS, params.leadId), {
-        fechaInscripcion: Timestamp.fromDate(hoy),
-        vencimientoSinergetico: Timestamp.fromDate(vencimientoSinergetico(hoy)),
-        vencimientoLive: lead.liveMeses
-          ? Timestamp.fromDate(vencimientoLive(hoy, lead.liveMeses))
-          : null,
-        actualizadoEn: Timestamp.now(),
-      });
-    }
-  }
+  // "Pagó/Renovó" ya no recalcula fechas: el sheet sigue siendo la fuente de
+  // verdad de la fecha de inscripción; la renovación se refleja allá.
 }
 
-/** Reparte leadIds entre vendedorIds según cantidadPorVendedor, en un solo batch. */
-export async function asignarLeadsEnLote(
-  leadIds: string[],
-  vendedorIds: string[],
-  cantidadPorVendedor: number
-) {
+export async function asignarLeadsEnLote(leadIds: string[], vendedorIds: string[], cantidadPorVendedor: number) {
   const batch = writeBatch(db);
   let cursor = 0;
   for (const vendedorId of vendedorIds) {
     const asignados = leadIds.slice(cursor, cursor + cantidadPorVendedor);
     cursor += cantidadPorVendedor;
     for (const leadId of asignados) {
-      batch.update(doc(db, LEADS, leadId), {
-        vendedorId,
-        actualizadoEn: Timestamp.now(),
-      });
+      batch.set(
+        doc(db, "leads", leadId),
+        { vendedorId, noContactar: false, actualizadoEn: Timestamp.now() },
+        { merge: true }
+      );
     }
   }
   await batch.commit();
-  return cursor; // total de leads efectivamente asignados
+  limpiarCacheOverlays();
+  return cursor;
 }
 
 export async function reasignarLead(leadId: string, vendedorId: string | null) {
-  await updateDoc(doc(db, LEADS, leadId), {
-    vendedorId,
-    actualizadoEn: Timestamp.now(),
+  const ref = doc(db, "leads", leadId);
+  await updateDoc(ref, { vendedorId, actualizadoEn: Timestamp.now() }).catch(async () => {
+    // el overlay puede no existir todavía si el lead nunca se había tocado
+    await asegurarOverlay(leadId);
+    await updateDoc(ref, { vendedorId, actualizadoEn: Timestamp.now() });
   });
 }
