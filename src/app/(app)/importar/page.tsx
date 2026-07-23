@@ -46,10 +46,23 @@ export default function ImportarPage() {
           </button>
 
           {resultado && (
-            <div className="rounded-2xl bg-surface-2 px-4 py-3 text-sm text-foreground">
-              {resultado.sinCambios
-                ? "No hay leads nuevos, el sheet no ha cambiado desde la última vez."
-                : `Se importaron ${resultado.nuevos} leads nuevos (hasta la fila #${resultado.ultimoNumeroSheet}).`}
+            <div
+              className={`rounded-2xl px-4 py-3 text-sm ${
+                resultado.limiteAlcanzado ? "bg-warning/10 text-warning" : "bg-surface-2 text-foreground"
+              }`}
+            >
+              {resultado.limiteAlcanzado ? (
+                <>
+                  Se importaron {resultado.nuevos} leads y se llegó al límite diario gratuito de
+                  Firestore (20,000 escrituras/día). El progreso quedó guardado — vuelve a presionar
+                  &quot;Actualizar leads nuevos&quot; después de que se reinicie la cuota (medianoche,
+                  hora del Pacífico) para traer el resto.
+                </>
+              ) : resultado.sinCambios ? (
+                "No hay leads nuevos, el sheet no ha cambiado desde la última vez."
+              ) : (
+                `Se importaron ${resultado.nuevos} leads nuevos (hasta la fila #${resultado.ultimoNumeroSheet}).`
+              )}
             </div>
           )}
           {error && <p className="text-sm text-danger">{error}</p>}

@@ -1,4 +1,4 @@
-import { doc, getDoc, setDoc, writeBatch, collection, Timestamp } from "firebase/firestore";
+import { doc, getDoc, setDoc, writeBatch, collection, Timestamp, WriteBatch } from "firebase/firestore";
 import { db } from "./firebase";
 import { parseCsv } from "./csv";
 import { parsearFechaInscripcion } from "./fechaSheet";
@@ -8,6 +8,7 @@ import { claveIdentidad, ultimos10Digitos } from "./identidad";
 const CONFIG_IMPORT = doc(db, "config", "import");
 const LEADS = "leads";
 const BATCH_MAX = 400;
+const TIMEOUT_COMMIT_MS = 20_000;
 
 // Índices de columna del CSV origen (ver AGENTS/memoria del análisis del sheet).
 const COL = {
@@ -33,16 +34,39 @@ function parsearNumeroFila(valor: string | undefined): number | null {
   return Number.isNaN(n) ? null : n;
 }
 
+/**
+ * El SDK de Firestore, cuando se topa con la cuota diaria agotada
+ * (resource-exhausted), a veces se queda reintentando con backoff en vez de
+ * rechazar la promesa — el commit() nunca resuelve ni truena. Por eso se
+ * envuelve con un timeout propio para no dejar la UI colgada para siempre.
+ */
+function commitConTimeout(batch: WriteBatch, ms: number): Promise<void> {
+  return Promise.race([
+    batch.commit(),
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error("TIMEOUT_CUOTA")), ms)
+    ),
+  ]);
+}
+
+function esErrorDeCuota(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err);
+  return msg.includes("resource-exhausted") || msg === "TIMEOUT_CUOTA";
+}
+
 export type ResultadoImportacion = {
   nuevos: number;
   ultimoNumeroSheet: number;
   sinCambios: boolean;
+  limiteAlcanzado?: boolean;
 };
 
 /**
  * Trae el CSV del sheet, ubica dónde quedó la última importación (por el
  * número de fila "#") y escribe solo las filas nuevas. No relee ni reescribe
- * nada de lo ya importado.
+ * nada de lo ya importado. Guarda el progreso después de cada lote (no solo
+ * al final) para poder reanudar si se corta por la cuota diaria gratuita de
+ * Firestore (20,000 escrituras/día).
  */
 export async function actualizarLeadsNuevos(): Promise<ResultadoImportacion> {
   const res = await fetch("/api/sheet-csv");
@@ -91,12 +115,27 @@ export async function actualizarLeadsNuevos(): Promise<ResultadoImportacion> {
   let batch = writeBatch(db);
   let enBatch = 0;
   let totalNuevos = 0;
+  let ultimoNumeroConfirmado = ultimoConocido ?? 0;
+  let ultimoNumeroEnLote = ultimoNumeroConfirmado;
+
+  async function confirmarLote() {
+    await commitConTimeout(batch, TIMEOUT_COMMIT_MS);
+    batch = writeBatch(db);
+    enBatch = 0;
+    ultimoNumeroConfirmado = ultimoNumeroEnLote;
+    await setDoc(CONFIG_IMPORT, {
+      ultimoNumeroSheet: ultimoNumeroConfirmado,
+      actualizadoEn: Timestamp.now(),
+    });
+  }
 
   for (let i = 0; i < nuevasFilas.length; i++) {
     const fila = nuevasFilas[i];
     const filaDatos = indiceInicio + i + 1; // 1-based, para elegir formato de fecha
 
     const numeroSheet = parsearNumeroFila(fila[COL.numero]);
+    if (numeroSheet !== null) ultimoNumeroEnLote = numeroSheet;
+
     const nombre = fila[COL.nombre]?.trim();
     if (!nombre) continue;
 
@@ -134,21 +173,42 @@ export async function actualizarLeadsNuevos(): Promise<ResultadoImportacion> {
     );
 
     enBatch++;
-    totalNuevos++;
 
     if (enBatch >= BATCH_MAX) {
-      await batch.commit();
-      batch = writeBatch(db);
-      enBatch = 0;
+      try {
+        await confirmarLote();
+        totalNuevos += BATCH_MAX;
+      } catch (err) {
+        if (esErrorDeCuota(err)) {
+          return {
+            nuevos: totalNuevos,
+            ultimoNumeroSheet: ultimoNumeroConfirmado,
+            sinCambios: false,
+            limiteAlcanzado: true,
+          };
+        }
+        throw err;
+      }
     }
   }
 
-  if (enBatch > 0) await batch.commit();
-
-  await setDoc(CONFIG_IMPORT, {
-    ultimoNumeroSheet: ultimoNumeroSheetActual,
-    actualizadoEn: Timestamp.now(),
-  });
+  if (enBatch > 0) {
+    try {
+      const pendientes = enBatch;
+      await confirmarLote();
+      totalNuevos += pendientes;
+    } catch (err) {
+      if (esErrorDeCuota(err)) {
+        return {
+          nuevos: totalNuevos,
+          ultimoNumeroSheet: ultimoNumeroConfirmado,
+          sinCambios: false,
+          limiteAlcanzado: true,
+        };
+      }
+      throw err;
+    }
+  }
 
   return { nuevos: totalNuevos, ultimoNumeroSheet: ultimoNumeroSheetActual, sinCambios: false };
 }
