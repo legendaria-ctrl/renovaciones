@@ -14,8 +14,8 @@ export default function ImportarPage() {
     setError(null);
     try {
       setResultado(await actualizarLeadsNuevos());
-    } catch {
-      setError("No se pudo leer el sheet. Verifica que esté compartido como público y que SHEET_ID esté configurado.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No se pudo leer el sheet.");
     } finally {
       setCargando(false);
     }
@@ -28,8 +28,9 @@ export default function ImportarPage() {
       <div className="shell rounded-[1.75rem] p-2 diffused">
         <div className="core flex flex-col items-start gap-4 rounded-[calc(1.75rem-0.5rem)] p-6">
           <p className="text-sm text-muted">
-            Lee el sheet de origen y trae solo las filas nuevas desde la última importación,
-            comparando el número de fila (#). No vuelve a leer ni sobrescribir lo ya importado.
+            Lee el sheet de origen vía la API de Google Sheets y trae solo las filas nuevas desde
+            la última importación (el sheet es de solo-inserción al final). No vuelve a leer ni
+            sobrescribir lo ya importado.
           </p>
 
           <button
@@ -61,7 +62,7 @@ export default function ImportarPage() {
               ) : resultado.sinCambios ? (
                 "No hay leads nuevos, el sheet no ha cambiado desde la última vez."
               ) : (
-                `Se importaron ${resultado.nuevos} leads nuevos (hasta la fila #${resultado.ultimoNumeroSheet}).`
+                `Se importaron ${resultado.nuevos} leads nuevos (${resultado.filasProcesadas} filas procesadas en total).`
               )}
             </div>
           )}

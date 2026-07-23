@@ -1,6 +1,5 @@
 import { doc, getDoc, setDoc, writeBatch, collection, Timestamp, WriteBatch } from "firebase/firestore";
 import { db } from "./firebase";
-import { parseCsv } from "./csv";
 import { parsearFechaInscripcion } from "./fechaSheet";
 import { vencimientoSinergetico, vencimientoLive } from "./membership";
 import { claveIdentidad, ultimos10Digitos } from "./identidad";
@@ -10,7 +9,7 @@ const LEADS = "leads";
 const BATCH_MAX = 400;
 const TIMEOUT_COMMIT_MS = 20_000;
 
-// Índices de columna del CSV origen (ver AGENTS/memoria del análisis del sheet).
+// Índices de columna del CSV/Sheet origen (ver AGENTS/memoria del análisis del sheet).
 const COL = {
   numero: 0,
   nombre: 1,
@@ -23,11 +22,10 @@ const COL = {
 };
 
 function parsearMeses(valor: string): number | null {
-  const m = valor.trim().match(/^(\d+)\s*Meses?$/i);
+  const m = (valor || "").trim().match(/^(\d+)\s*Meses?$/i);
   return m ? parseInt(m[1], 10) : null;
 }
 
-/** null si la celda no trae un número real, para no confundirla con "fila 0" al comparar. */
 function parsearNumeroFila(valor: string | undefined): number | null {
   if (!valor) return null;
   const n = parseInt(valor, 10);
@@ -35,17 +33,15 @@ function parsearNumeroFila(valor: string | undefined): number | null {
 }
 
 /**
- * El SDK de Firestore, cuando se topa con la cuota diaria agotada
+ * El SDK de Firestore, al toparse con la cuota diaria agotada
  * (resource-exhausted), a veces se queda reintentando con backoff en vez de
- * rechazar la promesa — el commit() nunca resuelve ni truena. Por eso se
- * envuelve con un timeout propio para no dejar la UI colgada para siempre.
+ * rechazar la promesa — el commit() nunca resuelve ni truena. Se envuelve
+ * con un timeout propio para no dejar la UI colgada para siempre.
  */
 function commitConTimeout(batch: WriteBatch, ms: number): Promise<void> {
   return Promise.race([
     batch.commit(),
-    new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error("TIMEOUT_CUOTA")), ms)
-    ),
+    new Promise<never>((_, reject) => setTimeout(() => reject(new Error("TIMEOUT_CUOTA")), ms)),
   ]);
 }
 
@@ -56,136 +52,106 @@ function esErrorDeCuota(err: unknown): boolean {
 
 export type ResultadoImportacion = {
   nuevos: number;
-  ultimoNumeroSheet: number;
+  filasProcesadas: number;
   sinCambios: boolean;
   limiteAlcanzado?: boolean;
 };
 
 /**
- * Trae el CSV del sheet, ubica dónde quedó la última importación (por el
- * número de fila "#") y escribe solo las filas nuevas. No relee ni reescribe
- * nada de lo ya importado. Guarda el progreso después de cada lote (no solo
- * al final) para poder reanudar si se corta por la cuota diaria gratuita de
- * Firestore (20,000 escrituras/día).
+ * Trae las filas del sheet vía la API real de Google Sheets (JSON, no CSV) y
+ * escribe solo las filas nuevas desde la última importación. El checkpoint
+ * es la CANTIDAD de filas de datos ya procesadas (posición en el arreglo),
+ * no el valor de la columna "#" — esa columna puede venir vacía o corrupta
+ * en algunas filas del sheet origen, así que nunca se usa como referencia
+ * para saber dónde se quedó la importación. El sheet es de solo-inserción al
+ * final, igual que asume el CRM hermano que lee este mismo sheet sin
+ * problemas.
  */
 export async function actualizarLeadsNuevos(): Promise<ResultadoImportacion> {
-  const res = await fetch("/api/sheet-csv");
-  if (!res.ok) throw new Error("No se pudo leer el sheet");
-  const texto = await res.text();
+  const res = await fetch("/api/sheet-values");
+  const data = await res.json();
+  if (!res.ok) throw new Error(data?.error || "No se pudo leer el sheet");
 
-  const filas = parseCsv(texto);
+  const filas: string[][] = data.values || [];
   const datos = filas.slice(1); // sin encabezado
 
   const configSnap = await getDoc(CONFIG_IMPORT);
-  // null = "nunca se ha importado nada", distinto de "esta fila no trae número".
-  const ultimoConocido: number | null = configSnap.exists()
-    ? ((configSnap.data().ultimoNumeroSheet as number) ?? null)
-    : null;
+  const filasYaProcesadas: number = configSnap.exists() ? (configSnap.data().filasProcesadas as number) || 0 : 0;
 
-  // El último número de fila válido de todo el sheet, buscando desde el final
-  // por si las últimas filas tienen la columna "#" vacía o corrupta.
-  let ultimoNumeroSheetActual = 0;
-  for (let i = datos.length - 1; i >= 0; i--) {
-    const numero = parsearNumeroFila(datos[i][COL.numero]);
-    if (numero !== null) {
-      ultimoNumeroSheetActual = numero;
-      break;
-    }
+  if (datos.length <= filasYaProcesadas) {
+    return { nuevos: 0, filasProcesadas: filasYaProcesadas, sinCambios: true };
   }
 
-  if (ultimoConocido !== null && ultimoNumeroSheetActual === ultimoConocido) {
-    return { nuevos: 0, ultimoNumeroSheet: ultimoConocido, sinCambios: true };
-  }
-
-  // Sube desde el final hasta encontrar la última fila ya conocida, ignorando
-  // filas sin número válido (no cuentan como coincidencia ni cortan la búsqueda).
-  let indiceInicio = 0;
-  if (ultimoConocido !== null) {
-    for (let i = datos.length - 1; i >= 0; i--) {
-      const numero = parsearNumeroFila(datos[i][COL.numero]);
-      if (numero === ultimoConocido) {
-        indiceInicio = i + 1;
-        break;
-      }
-    }
-  }
-
-  const nuevasFilas = datos.slice(indiceInicio);
+  const nuevasFilas = datos.slice(filasYaProcesadas);
 
   let batch = writeBatch(db);
   let enBatch = 0;
   let totalNuevos = 0;
-  let ultimoNumeroConfirmado = ultimoConocido ?? 0;
-  let ultimoNumeroEnLote = ultimoNumeroConfirmado;
+  let filasConfirmadas = filasYaProcesadas;
+  let filasEnLote = filasYaProcesadas;
 
   async function confirmarLote() {
     await commitConTimeout(batch, TIMEOUT_COMMIT_MS);
     batch = writeBatch(db);
     enBatch = 0;
-    ultimoNumeroConfirmado = ultimoNumeroEnLote;
+    filasConfirmadas = filasEnLote;
     await setDoc(CONFIG_IMPORT, {
-      ultimoNumeroSheet: ultimoNumeroConfirmado,
+      filasProcesadas: filasConfirmadas,
       actualizadoEn: Timestamp.now(),
     });
   }
 
   for (let i = 0; i < nuevasFilas.length; i++) {
     const fila = nuevasFilas[i];
-    const filaDatos = indiceInicio + i + 1; // 1-based, para elegir formato de fecha
+    const filaDatos = filasYaProcesadas + i + 1; // 1-based, para elegir formato de fecha
+    filasEnLote = filasYaProcesadas + i + 1;
 
     const numeroSheet = parsearNumeroFila(fila[COL.numero]);
-    if (numeroSheet !== null) ultimoNumeroEnLote = numeroSheet;
-
     const nombre = fila[COL.nombre]?.trim();
-    if (!nombre) continue;
 
-    const fecha = parsearFechaInscripcion(fila[COL.fechaInscripcion] ?? "", filaDatos);
-    if (!fecha) continue;
+    if (nombre) {
+      const fecha = parsearFechaInscripcion(fila[COL.fechaInscripcion] ?? "", filaDatos);
+      const correo = fila[COL.correo]?.trim() || null;
+      const telefono = fila[COL.telefono]?.trim() || null;
+      const liveMeses = parsearMeses(fila[COL.liveMeses] ?? "");
+      const clave = claveIdentidad(correo, telefono);
 
-    const correo = fila[COL.correo]?.trim() || null;
-    const telefono = fila[COL.telefono]?.trim() || null;
-    const liveMeses = parsearMeses(fila[COL.liveMeses] ?? "");
-    const clave = claveIdentidad(correo, telefono);
-    if (!clave) continue;
-
-    const leadRef = doc(collection(db, LEADS), clave.replace(/[/]/g, "_"));
-    batch.set(
-      leadRef,
-      {
-        numeroSheet,
-        nombre,
-        nombreLower: nombre.toLowerCase(),
-        correo,
-        telefono,
-        telefonoClave: ultimos10Digitos(telefono),
-        pais: fila[COL.pais]?.trim() || null,
-        ciudad: fila[COL.ciudad]?.trim() || null,
-        fechaInscripcion: Timestamp.fromDate(fecha),
-        liveMeses,
-        vencimientoSinergetico: Timestamp.fromDate(vencimientoSinergetico(fecha)),
-        vencimientoLive: liveMeses ? Timestamp.fromDate(vencimientoLive(fecha, liveMeses)) : null,
-        vendedorId: null,
-        noContactar: false,
-        creadoEn: Timestamp.now(),
-        actualizadoEn: Timestamp.now(),
-      },
-      { merge: true }
-    );
-
-    enBatch++;
+      if (fecha && clave) {
+        const leadRef = doc(collection(db, LEADS), clave.replace(/[/]/g, "_"));
+        batch.set(
+          leadRef,
+          {
+            numeroSheet,
+            nombre,
+            nombreLower: nombre.toLowerCase(),
+            correo,
+            telefono,
+            telefonoClave: ultimos10Digitos(telefono),
+            pais: fila[COL.pais]?.trim() || null,
+            ciudad: fila[COL.ciudad]?.trim() || null,
+            fechaInscripcion: Timestamp.fromDate(fecha),
+            liveMeses,
+            vencimientoSinergetico: Timestamp.fromDate(vencimientoSinergetico(fecha)),
+            vencimientoLive: liveMeses ? Timestamp.fromDate(vencimientoLive(fecha, liveMeses)) : null,
+            vendedorId: null,
+            noContactar: false,
+            creadoEn: Timestamp.now(),
+            actualizadoEn: Timestamp.now(),
+          },
+          { merge: true }
+        );
+        enBatch++;
+      }
+    }
 
     if (enBatch >= BATCH_MAX) {
       try {
+        const pendientes = enBatch;
         await confirmarLote();
-        totalNuevos += BATCH_MAX;
+        totalNuevos += pendientes;
       } catch (err) {
         if (esErrorDeCuota(err)) {
-          return {
-            nuevos: totalNuevos,
-            ultimoNumeroSheet: ultimoNumeroConfirmado,
-            sinCambios: false,
-            limiteAlcanzado: true,
-          };
+          return { nuevos: totalNuevos, filasProcesadas: filasConfirmadas, sinCambios: false, limiteAlcanzado: true };
         }
         throw err;
       }
@@ -199,16 +165,16 @@ export async function actualizarLeadsNuevos(): Promise<ResultadoImportacion> {
       totalNuevos += pendientes;
     } catch (err) {
       if (esErrorDeCuota(err)) {
-        return {
-          nuevos: totalNuevos,
-          ultimoNumeroSheet: ultimoNumeroConfirmado,
-          sinCambios: false,
-          limiteAlcanzado: true,
-        };
+        return { nuevos: totalNuevos, filasProcesadas: filasConfirmadas, sinCambios: false, limiteAlcanzado: true };
       }
       throw err;
     }
+  } else if (filasEnLote !== filasConfirmadas) {
+    // Últimas filas sin datos válidos para guardar, pero igual hay que
+    // avanzar el checkpoint para no releerlas en el siguiente intento.
+    await setDoc(CONFIG_IMPORT, { filasProcesadas: filasEnLote, actualizadoEn: Timestamp.now() });
+    filasConfirmadas = filasEnLote;
   }
 
-  return { nuevos: totalNuevos, ultimoNumeroSheet: ultimoNumeroSheetActual, sinCambios: false };
+  return { nuevos: totalNuevos, filasProcesadas: filasConfirmadas, sinCambios: false };
 }

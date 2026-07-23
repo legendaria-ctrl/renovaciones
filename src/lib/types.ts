@@ -60,6 +60,6 @@ export type SolicitudAbono = {
 };
 
 export type ImportState = {
-  ultimoNumeroSheet: number;
+  filasProcesadas: number;
   actualizadoEn: Timestamp;
 };
