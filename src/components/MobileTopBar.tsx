@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { Menu, Hourglass } from "lucide-react";
 import { useSidebarDrawer } from "@/lib/sidebar-drawer-context";
 import { usePendientes } from "@/lib/pendientes-context";
@@ -23,8 +24,9 @@ export function MobileTopBar() {
       </button>
       <Link
         href="/"
-        className="flex h-[52px] flex-1 items-center justify-center rounded-2xl bg-white shadow-[0_10px_24px_-10px_rgba(11,18,32,0.35)] transition-transform duration-500 ease-spring active:scale-[0.98]"
+        className="flex h-[52px] flex-1 items-center justify-center gap-2 rounded-2xl bg-white shadow-[0_10px_24px_-10px_rgba(11,18,32,0.35)] transition-transform duration-500 ease-spring active:scale-[0.98]"
       >
+        <Image src="/renovacion-logo.png" alt="Renovaciones" width={28} height={28} className="h-7 w-7" />
         <span className="text-base font-semibold tracking-tight text-foreground">
           Renovaciones<span className="text-primary">.</span>
         </span>

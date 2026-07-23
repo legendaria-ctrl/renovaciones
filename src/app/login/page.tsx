@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import { signInWithEmailAndPassword } from "firebase/auth";
 import { KeyRound, Mail, ArrowUpRight, LoaderCircle, Eye, EyeOff } from "lucide-react";
 import { auth } from "@/lib/firebase";
@@ -40,13 +41,23 @@ export default function LoginPage() {
       style={{ paddingTop: "calc(env(safe-area-inset-top, 0px) + 4rem)" }}
     >
       <div className="w-full max-w-md">
-        <div className="mb-8 text-center md:text-left">
-          <h1 className="text-2xl font-semibold tracking-tight text-white">
-            Renovaciones<span className="text-primary-glow">.</span>
-          </h1>
-          <p className="mt-1 text-sm text-white/70">
-            Inicia sesión con tu correo y contraseña.
-          </p>
+        <div className="mb-8 flex flex-col items-center gap-3 text-center md:items-start md:text-left">
+          <Image
+            src="/renovacion-logo.png"
+            alt="Renovaciones"
+            width={72}
+            height={72}
+            priority
+            className="h-16 w-16 drop-shadow-[0_10px_30px_rgba(87,161,255,0.45)]"
+          />
+          <div>
+            <h1 className="text-2xl font-semibold tracking-tight text-white">
+              Renovaciones<span className="text-primary-glow">.</span>
+            </h1>
+            <p className="mt-1 text-sm text-white/70">
+              Inicia sesión con tu correo y contraseña.
+            </p>
+          </div>
         </div>
 
         <form onSubmit={handleSubmit} className="shell rounded-[2rem] p-2 diffused-lg">

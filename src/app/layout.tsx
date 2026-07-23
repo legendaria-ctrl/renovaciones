@@ -16,6 +16,7 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Renovaciones",
   description: "Gestión de renovaciones del Club Sinergético",
+  icons: { icon: "/renovacion-logo.png" },
 };
 
 export default function RootLayout({
