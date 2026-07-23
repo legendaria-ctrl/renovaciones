@@ -1,0 +1,58 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function autenticado() {
+      return request.auth != null;
+    }
+
+    function perfil() {
+      return get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data;
+    }
+
+    function rol() {
+      return autenticado() ? perfil().rol : null;
+    }
+
+    function esAdmin() {
+      return autenticado() && rol() == 'ADMIN';
+    }
+
+    function puedeAsignar() {
+      return autenticado() && (rol() == 'ADMIN' || rol() == 'COORDINADOR');
+    }
+
+    match /usuarios/{uid} {
+      allow read: if autenticado();
+      allow create, update: if esAdmin() || (autenticado() && request.auth.uid == uid && request.resource.data.rol == resource.data.rol);
+      allow delete: if esAdmin();
+    }
+
+    match /leads/{leadId} {
+      allow read: if autenticado();
+      // Un vendedor solo puede tocar sus propios leads asignados; coordinador/admin, cualquiera.
+      allow create: if esAdmin();
+      allow update: if puedeAsignar() || (autenticado() && resource.data.vendedorId == request.auth.uid);
+      allow delete: if esAdmin();
+
+      match /notas/{notaId} {
+        allow read: if autenticado();
+        allow create: if autenticado();
+        allow update, delete: if esAdmin();
+      }
+    }
+
+    match /solicitudesAbono/{id} {
+      allow read: if autenticado();
+      allow create: if autenticado() && request.resource.data.vendedorId == request.auth.uid;
+      allow update: if puedeAsignar();
+      allow delete: if esAdmin();
+    }
+
+    match /config/{id} {
+      allow read: if autenticado();
+      allow write: if esAdmin();
+    }
+  }
+}
