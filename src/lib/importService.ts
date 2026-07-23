@@ -26,6 +26,13 @@ function parsearMeses(valor: string): number | null {
   return m ? parseInt(m[1], 10) : null;
 }
 
+/** null si la celda no trae un número real, para no confundirla con "fila 0" al comparar. */
+function parsearNumeroFila(valor: string | undefined): number | null {
+  if (!valor) return null;
+  const n = parseInt(valor, 10);
+  return Number.isNaN(n) ? null : n;
+}
+
 export type ResultadoImportacion = {
   nuevos: number;
   ultimoNumeroSheet: number;
@@ -46,22 +53,36 @@ export async function actualizarLeadsNuevos(): Promise<ResultadoImportacion> {
   const datos = filas.slice(1); // sin encabezado
 
   const configSnap = await getDoc(CONFIG_IMPORT);
-  const ultimoConocido = configSnap.exists() ? (configSnap.data().ultimoNumeroSheet as number) : 0;
+  // null = "nunca se ha importado nada", distinto de "esta fila no trae número".
+  const ultimoConocido: number | null = configSnap.exists()
+    ? ((configSnap.data().ultimoNumeroSheet as number) ?? null)
+    : null;
 
-  const ultimaFila = datos.at(-1);
-  const ultimoNumeroSheetActual = ultimaFila ? parseInt(ultimaFila[COL.numero], 10) || 0 : 0;
+  // El último número de fila válido de todo el sheet, buscando desde el final
+  // por si las últimas filas tienen la columna "#" vacía o corrupta.
+  let ultimoNumeroSheetActual = 0;
+  for (let i = datos.length - 1; i >= 0; i--) {
+    const numero = parsearNumeroFila(datos[i][COL.numero]);
+    if (numero !== null) {
+      ultimoNumeroSheetActual = numero;
+      break;
+    }
+  }
 
-  if (ultimoNumeroSheetActual === ultimoConocido) {
+  if (ultimoConocido !== null && ultimoNumeroSheetActual === ultimoConocido) {
     return { nuevos: 0, ultimoNumeroSheet: ultimoConocido, sinCambios: true };
   }
 
-  // Sube desde el final hasta encontrar la última fila ya conocida.
+  // Sube desde el final hasta encontrar la última fila ya conocida, ignorando
+  // filas sin número válido (no cuentan como coincidencia ni cortan la búsqueda).
   let indiceInicio = 0;
-  for (let i = datos.length - 1; i >= 0; i--) {
-    const numero = parseInt(datos[i][COL.numero], 10) || 0;
-    if (numero === ultimoConocido) {
-      indiceInicio = i + 1;
-      break;
+  if (ultimoConocido !== null) {
+    for (let i = datos.length - 1; i >= 0; i--) {
+      const numero = parsearNumeroFila(datos[i][COL.numero]);
+      if (numero === ultimoConocido) {
+        indiceInicio = i + 1;
+        break;
+      }
     }
   }
 
@@ -75,7 +96,7 @@ export async function actualizarLeadsNuevos(): Promise<ResultadoImportacion> {
     const fila = nuevasFilas[i];
     const filaDatos = indiceInicio + i + 1; // 1-based, para elegir formato de fecha
 
-    const numeroSheet = parseInt(fila[COL.numero], 10) || null;
+    const numeroSheet = parsearNumeroFila(fila[COL.numero]);
     const nombre = fila[COL.nombre]?.trim();
     if (!nombre) continue;
 
