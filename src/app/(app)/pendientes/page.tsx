@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { Check, X } from "lucide-react";
+import { Check, X, ExternalLink } from "lucide-react";
 import { listarPendientes, resolverSolicitud } from "@/lib/pendientesService";
 import { usePendientes } from "@/lib/pendientes-context";
 import { useSesion } from "@/lib/session-context";
 import { aFecha } from "@/lib/membership";
+import { TIPOS_SOLICITUD, TIPO_SOLICITUD_LABEL } from "@/lib/constants";
 import { SolicitudAbono } from "@/lib/types";
 
 export default function PendientesPage() {
@@ -48,10 +49,30 @@ export default function PendientesPage() {
             solicitudes.map((s) => (
               <div key={s.id} className="flex flex-wrap items-center justify-between gap-3 py-4">
                 <div>
-                  <p className="text-sm font-medium text-foreground">{s.leadNombre}</p>
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-medium text-foreground">{s.leadNombre}</p>
+                    <span
+                      className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
+                        s.tipo === TIPOS_SOLICITUD.PAGO ? "bg-success/10 text-success" : "bg-warning/10 text-warning"
+                      }`}
+                    >
+                      {TIPO_SOLICITUD_LABEL[s.tipo]}
+                    </span>
+                  </div>
                   <p className="text-xs text-muted">
-                    {s.tipoMembresia} · ${s.monto.toLocaleString("es-MX")} · registrado por {s.vendedorNombre}
+                    {s.tipoMembresia} · ${s.monto.toLocaleString("es-MX")} {s.moneda} · registrado por{" "}
+                    {s.vendedorNombre}
                   </p>
+                  {s.comprobanteUrl && (
+                    <a
+                      href={s.comprobanteUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="mt-1 flex w-fit items-center gap-1 text-xs text-primary hover:underline"
+                    >
+                      Ver comprobante <ExternalLink className="h-3 w-3" strokeWidth={1.75} />
+                    </a>
+                  )}
                   {s.notas && <p className="mt-1 text-xs text-muted">{s.notas}</p>}
                   <p className="mt-1 text-[11px] text-muted">
                     {aFecha(s.creadoEn)?.toLocaleString("es-MX")}

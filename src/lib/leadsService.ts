@@ -4,6 +4,7 @@ import { Lead, NotaLead, SheetLead, LeadOverlay } from "./types";
 import { ACCIONES_LEAD, ACCION_LABEL, LLAMADA_LABEL, AccionLead, EstadoLlamada } from "./constants";
 import { obtenerLeadsDelSheet } from "./sheetService";
 import { obtenerOverlays, obtenerOverlay, asegurarOverlay, limpiarCacheOverlays, OVERLAY_VACIO } from "./overlayService";
+import { aFecha, vencimientoSinergetico, vencimientoLive } from "./membership";
 
 const NOTAS = "notas";
 const PAGE_SIZE = 30;
@@ -22,7 +23,18 @@ export type FiltrosLeads = {
 };
 
 function combinarLead(s: SheetLead, o: LeadOverlay): Lead {
-  return { ...s, vendedorId: o.vendedorId ?? null, noContactar: o.noContactar ?? false, llamada: o.llamada ?? null };
+  const overrideSiner = aFecha(o.vencimientoSinergeticoOverride ?? null);
+  const overrideLive = aFecha(o.vencimientoLiveOverride ?? null);
+  return {
+    ...s,
+    vencimientoSinergetico:
+      overrideSiner && overrideSiner > s.vencimientoSinergetico ? overrideSiner : s.vencimientoSinergetico,
+    vencimientoLive:
+      overrideLive && (!s.vencimientoLive || overrideLive > s.vencimientoLive) ? overrideLive : s.vencimientoLive,
+    vendedorId: o.vendedorId ?? null,
+    noContactar: o.noContactar ?? false,
+    llamada: o.llamada ?? null,
+  };
 }
 
 function combinarConOverlay(sheetLeads: SheetLead[], overlays: Map<string, LeadOverlay>): Lead[] {
@@ -157,6 +169,28 @@ export async function actualizarLlamada(
     monto: null,
     creadoEn: Timestamp.now(),
   });
+}
+
+/** Se llama al aprobar un "Pago/Renovación": extiende el vencimiento efectivo sin tocar el sheet. */
+export async function aplicarRenovacionManual(
+  leadId: string,
+  tipoMembresia: "SINERGETICO" | "LIVE",
+  liveMeses: number | null
+) {
+  const ref = await asegurarOverlay(leadId);
+  const ahora = new Date();
+  if (tipoMembresia === "LIVE" && liveMeses) {
+    await updateDoc(ref, {
+      vencimientoLiveOverride: Timestamp.fromDate(vencimientoLive(ahora, liveMeses)),
+      actualizadoEn: Timestamp.now(),
+    });
+  } else {
+    await updateDoc(ref, {
+      vencimientoSinergeticoOverride: Timestamp.fromDate(vencimientoSinergetico(ahora)),
+      actualizadoEn: Timestamp.now(),
+    });
+  }
+  limpiarCacheOverlays();
 }
 
 export async function asignarLeadsEnLote(leadIds: string[], vendedorIds: string[], cantidadPorVendedor: number) {

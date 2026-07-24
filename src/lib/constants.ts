@@ -103,3 +103,20 @@ export const ESTADOS_SOLICITUD = {
   RECHAZADO: "RECHAZADO",
 } as const;
 export type EstadoSolicitud = (typeof ESTADOS_SOLICITUD)[keyof typeof ESTADOS_SOLICITUD];
+
+export const TIPOS_SOLICITUD = {
+  PAGO: "PAGO",
+  ABONO: "ABONO",
+} as const;
+export type TipoSolicitud = (typeof TIPOS_SOLICITUD)[keyof typeof TIPOS_SOLICITUD];
+
+export const TIPO_SOLICITUD_LABEL: Record<TipoSolicitud, string> = {
+  PAGO: "Pago / Renovación",
+  ABONO: "Abono",
+};
+
+export const MONEDAS = {
+  MXN: "MXN",
+  USD: "USD",
+} as const;
+export type Moneda = (typeof MONEDAS)[keyof typeof MONEDAS];

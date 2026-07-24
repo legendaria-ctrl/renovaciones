@@ -1,5 +1,5 @@
 import { Timestamp } from "firebase/firestore";
-import { AccionLead, EstadoLlamada, EstadoSolicitud, Rol } from "./constants";
+import { AccionLead, EstadoLlamada, EstadoSolicitud, Moneda, Rol, TipoMembresia, TipoSolicitud } from "./constants";
 
 /** Datos del lead tal como vienen del sheet (fuente de verdad, nunca se copian a Firestore). */
 export type SheetLead = {
@@ -21,6 +21,11 @@ export type LeadOverlay = {
   vendedorId: string | null;
   noContactar: boolean;
   llamada: EstadoLlamada | null;
+  // Vencimiento efectivo tras un pago aprobado. El sheet sigue siendo la
+  // fuente de verdad para el historial, pero no se reescribe desde la app;
+  // esta es la forma de reflejar una renovación sin tocarlo.
+  vencimientoSinergeticoOverride?: Timestamp | null;
+  vencimientoLiveOverride?: Timestamp | null;
   creadoEn?: Timestamp;
   actualizadoEn?: Timestamp;
 };
@@ -56,8 +61,13 @@ export type SolicitudAbono = {
   leadNombre: string;
   vendedorId: string;
   vendedorNombre: string;
+  tipo: TipoSolicitud;
   monto: number;
-  tipoMembresia: string;
+  moneda: Moneda;
+  comprobanteUrl: string;
+  tipoMembresia: string; // etiqueta para mostrar
+  tipoMembresiaKey: TipoMembresia; // para recalcular el vencimiento al aprobar
+  liveMeses: number | null;
   notas: string;
   estado: EstadoSolicitud;
   creadoEn: Timestamp;

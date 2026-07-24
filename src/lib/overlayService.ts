@@ -42,7 +42,13 @@ export async function obtenerOverlay(id: string): Promise<LeadOverlay | null> {
   return snap.exists() ? (snap.data() as LeadOverlay) : null;
 }
 
-const OVERLAY_VACIO: LeadOverlay = { vendedorId: null, noContactar: false, llamada: null };
+const OVERLAY_VACIO: LeadOverlay = {
+  vendedorId: null,
+  noContactar: false,
+  llamada: null,
+  vencimientoSinergeticoOverride: null,
+  vencimientoLiveOverride: null,
+};
 
 /** Crea el overlay la primera vez que alguien toca un lead; si ya existe, solo mergea. */
 export async function asegurarOverlay(id: string) {

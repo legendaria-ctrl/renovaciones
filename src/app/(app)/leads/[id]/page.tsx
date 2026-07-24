@@ -16,7 +16,7 @@ import {
   Activity,
 } from "lucide-react";
 import { obtenerLead, listarNotasLead, registrarAccionLead, actualizarLlamada } from "@/lib/leadsService";
-import { crearSolicitudAbono } from "@/lib/pendientesService";
+import { crearSolicitud } from "@/lib/pendientesService";
 import { usePendientes } from "@/lib/pendientes-context";
 import { useSesion } from "@/lib/session-context";
 import { estadoDesdeVencimiento, aFecha } from "@/lib/membership";
@@ -24,8 +24,11 @@ import {
   ACCIONES_LEAD,
   ACCION_LABEL,
   MEMBRESIA_LABEL,
+  TIPOS_MEMBRESIA,
   ESTADOS_LLAMADA,
   LLAMADA_LABEL,
+  MONEDAS,
+  Moneda,
   EstadoLlamada,
 } from "@/lib/constants";
 import { Lead, NotaLead } from "@/lib/types";
@@ -58,9 +61,11 @@ export default function LeadDetallePage() {
   const [notas, setNotas] = useState<NotaLead[]>([]);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [accionAbierta, setAccionAbierta] = useState<null | "ABONO" | "NOTA">(null);
+  const [accionAbierta, setAccionAbierta] = useState<null | "PAGO" | "ABONO" | "NOTA">(null);
   const [texto, setTexto] = useState("");
   const [monto, setMonto] = useState(0);
+  const [moneda, setMoneda] = useState<Moneda>(MONEDAS.MXN);
+  const [comprobanteUrl, setComprobanteUrl] = useState("");
   const [enviando, setEnviando] = useState(false);
 
   const cargar = useCallback(async () => {
@@ -81,7 +86,7 @@ export default function LeadDetallePage() {
     cargar();
   }, [cargar]);
 
-  async function registrarSimple(tipo: "PAGO" | "NO_CONTACTAR") {
+  async function registrarSimple(tipo: "NO_CONTACTAR") {
     if (!usuario || !lead) return;
     setEnviando(true);
     await registrarAccionLead({
@@ -119,19 +124,26 @@ export default function LeadDetallePage() {
     cargar();
   }
 
-  async function enviarAbono() {
-    if (!usuario || !lead || monto <= 0) return;
+  async function enviarSolicitud(tipo: "PAGO" | "ABONO") {
+    if (!usuario || !lead || monto <= 0 || !comprobanteUrl.trim()) return;
     setEnviando(true);
-    await crearSolicitudAbono({
+    const tipoMembresiaKey = lead.liveMeses ? TIPOS_MEMBRESIA.LIVE : TIPOS_MEMBRESIA.SINERGETICO;
+    await crearSolicitud({
       leadId: lead.id,
       leadNombre: lead.nombre,
       vendedorId: usuario.id,
       vendedorNombre: usuario.nombre,
+      tipo,
       monto,
-      tipoMembresia: lead.liveMeses ? MEMBRESIA_LABEL.LIVE : MEMBRESIA_LABEL.SINERGETICO,
+      moneda,
+      comprobanteUrl: comprobanteUrl.trim(),
+      tipoMembresia: MEMBRESIA_LABEL[tipoMembresiaKey],
+      tipoMembresiaKey,
+      liveMeses: lead.liveMeses,
       notas: texto.trim(),
     });
     setMonto(0);
+    setComprobanteUrl("");
     setTexto("");
     setAccionAbierta(null);
     setEnviando(false);
@@ -252,7 +264,7 @@ export default function LeadDetallePage() {
 
               <div className="flex flex-wrap gap-2">
                 <button
-                  onClick={() => registrarSimple("PAGO")}
+                  onClick={() => setAccionAbierta("PAGO")}
                   disabled={enviando}
                   className="flex items-center gap-2 rounded-xl bg-success/10 px-4 py-2.5 text-sm font-medium text-success transition-all duration-500 ease-spring active:scale-[0.98] disabled:opacity-50"
                 >
@@ -289,21 +301,48 @@ export default function LeadDetallePage() {
 
               {accionAbierta && (
                 <div className="rounded-2xl bg-surface-2 p-4">
-                  {accionAbierta === "ABONO" && (
-                    <label className="mb-3 flex flex-col gap-2">
-                      <span className="text-xs font-medium uppercase tracking-wider text-muted">Monto del abono</span>
-                      <input
-                        type="number"
-                        min={1}
-                        value={monto || ""}
-                        onChange={(e) => setMonto(parseFloat(e.target.value) || 0)}
-                        className="rounded-xl border border-silver-deep/60 bg-surface px-4 py-2.5 text-sm outline-none"
-                      />
-                    </label>
+                  {(accionAbierta === "PAGO" || accionAbierta === "ABONO") && (
+                    <div className="mb-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                      <label className="flex flex-col gap-2">
+                        <span className="text-xs font-medium uppercase tracking-wider text-muted">
+                          Monto {accionAbierta === "PAGO" ? "pagado" : "del abono"}
+                        </span>
+                        <input
+                          type="number"
+                          min={1}
+                          value={monto || ""}
+                          onChange={(e) => setMonto(parseFloat(e.target.value) || 0)}
+                          className="rounded-xl border border-silver-deep/60 bg-surface px-4 py-2.5 text-sm outline-none"
+                        />
+                      </label>
+                      <label className="flex flex-col gap-2">
+                        <span className="text-xs font-medium uppercase tracking-wider text-muted">Moneda</span>
+                        <select
+                          value={moneda}
+                          onChange={(e) => setMoneda(e.target.value as Moneda)}
+                          className="rounded-xl border border-silver-deep/60 bg-surface px-4 py-2.5 text-sm outline-none"
+                        >
+                          <option value={MONEDAS.MXN}>MXN</option>
+                          <option value={MONEDAS.USD}>USD</option>
+                        </select>
+                      </label>
+                      <label className="flex flex-col gap-2 sm:col-span-2">
+                        <span className="text-xs font-medium uppercase tracking-wider text-muted">
+                          Enlace del comprobante
+                        </span>
+                        <input
+                          type="url"
+                          placeholder="https://…"
+                          value={comprobanteUrl}
+                          onChange={(e) => setComprobanteUrl(e.target.value)}
+                          className="rounded-xl border border-silver-deep/60 bg-surface px-4 py-2.5 text-sm outline-none"
+                        />
+                      </label>
+                    </div>
                   )}
                   <label className="flex flex-col gap-2">
                     <span className="text-xs font-medium uppercase tracking-wider text-muted">
-                      {accionAbierta === "ABONO" ? "Notas (opcional)" : "Nota"}
+                      {accionAbierta === "NOTA" ? "Nota" : "Notas (opcional)"}
                     </span>
                     <textarea
                       value={texto}
@@ -317,11 +356,16 @@ export default function LeadDetallePage() {
                       Cancelar
                     </button>
                     <button
-                      onClick={accionAbierta === "ABONO" ? enviarAbono : enviarNota}
-                      disabled={enviando}
+                      onClick={() =>
+                        accionAbierta === "NOTA" ? enviarNota() : enviarSolicitud(accionAbierta)
+                      }
+                      disabled={
+                        enviando ||
+                        (accionAbierta !== "NOTA" && (monto <= 0 || !comprobanteUrl.trim()))
+                      }
                       className="rounded-xl bg-primary px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
                     >
-                      {accionAbierta === "ABONO" ? "Enviar a autorización" : "Guardar nota"}
+                      {accionAbierta === "NOTA" ? "Guardar nota" : "Enviar a autorización"}
                     </button>
                   </div>
                 </div>
