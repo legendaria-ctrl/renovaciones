@@ -34,6 +34,26 @@ export function diasRestantes(vencimiento: Date | null): number | null {
   return Math.ceil(ms / (1000 * 60 * 60 * 24));
 }
 
+function formatoUnidad(dias: number): string {
+  if (dias < 30) return `${dias} día${dias === 1 ? "" : "s"}`;
+  if (dias < 365) {
+    const meses = Math.round(dias / 30);
+    return `${meses} mes${meses === 1 ? "" : "es"}`;
+  }
+  const anios = Math.round(dias / 365);
+  return `${anios} año${anios === 1 ? "" : "s"}`;
+}
+
+/** "Vence el 5/1/2026 · en 12 días" o "Venció el 5/1/2023 · hace 2 años". */
+export function textoVencimiento(vencimiento: Date | null): string {
+  if (!vencimiento) return "Sin membresía";
+  const fechaTexto = vencimiento.toLocaleDateString("es-MX");
+  const dias = diasRestantes(vencimiento);
+  if (dias === null) return `Vence ${fechaTexto}`;
+  if (dias >= 0) return `Vence ${fechaTexto} · en ${formatoUnidad(Math.max(1, dias))}`;
+  return `Venció ${fechaTexto} · hace ${formatoUnidad(Math.abs(dias))}`;
+}
+
 export type EstadoMembresias = {
   sinergetico: { vencimiento: Date; estado: EstadoLead };
   live: { vencimiento: Date; estado: EstadoLead; meses: number } | { vencimiento: null; estado: "SIN_MEMBRESIA"; meses: null };

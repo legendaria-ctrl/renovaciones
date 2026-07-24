@@ -13,7 +13,7 @@ import {
   FiltroEstado,
 } from "@/lib/leadsService";
 import { listarVendedoresActivos } from "@/lib/vendedoresService";
-import { estadoDesdeVencimiento, aFecha } from "@/lib/membership";
+import { estadoDesdeVencimiento, aFecha, textoVencimiento } from "@/lib/membership";
 import { limpiarCacheSheet } from "@/lib/sheetService";
 import { limpiarCacheOverlays } from "@/lib/overlayService";
 import { Lead, Usuario } from "@/lib/types";
@@ -228,6 +228,7 @@ export default function LeadsPage() {
                         <p className="truncate text-xs text-muted">
                           {lead.correo ?? lead.telefono ?? "sin contacto"}
                         </p>
+                        <p className="truncate text-xs text-muted">{textoVencimiento(venc)}</p>
                       </div>
                       <div className="flex flex-none items-center gap-2">
                         <StatusBadge estado={est} />
