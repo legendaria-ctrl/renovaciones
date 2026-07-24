@@ -15,7 +15,7 @@ import {
   PhoneCall,
   Activity,
 } from "lucide-react";
-import { obtenerLead, listarNotasLead, registrarAccionLead, actualizarLlamada } from "@/lib/leadsService";
+import { obtenerLead, listarNotasLead, registrarAccionLead, actualizarLlamada, registrarAbono } from "@/lib/leadsService";
 import { crearSolicitud } from "@/lib/pendientesService";
 import { usePendientes } from "@/lib/pendientes-context";
 import { useSesion } from "@/lib/session-context";
@@ -124,24 +124,21 @@ export default function LeadDetallePage() {
     cargar();
   }
 
-  async function enviarSolicitud(tipo: "PAGO" | "ABONO") {
+  /** Pago/Renovación: requiere autorización del admin/coordinador antes de reflejarse. */
+  async function enviarPago() {
     if (!usuario || !lead || monto <= 0 || !comprobanteUrl.trim()) return;
     setEnviando(true);
-    // Un "Pago/Renovación" siempre da 1 año de ambas membresías; el abono no
-    // renueva nada por sí solo, así que ahí sí importa a cuál aplica.
     const tipoMembresiaKey = lead.liveMeses ? TIPOS_MEMBRESIA.LIVE : TIPOS_MEMBRESIA.SINERGETICO;
-    const tipoMembresiaLabel =
-      tipo === "PAGO" ? "Club Sinergético + Club Sinergético Live (1 año)" : MEMBRESIA_LABEL[tipoMembresiaKey];
     await crearSolicitud({
       leadId: lead.id,
       leadNombre: lead.nombre,
       vendedorId: usuario.id,
       vendedorNombre: usuario.nombre,
-      tipo,
+      tipo: "PAGO",
       monto,
       moneda,
       comprobanteUrl: comprobanteUrl.trim(),
-      tipoMembresia: tipoMembresiaLabel,
+      tipoMembresia: "Club Sinergético + Club Sinergético Live (1 año)",
       tipoMembresiaKey,
       liveMeses: lead.liveMeses,
       notas: texto.trim(),
@@ -152,6 +149,27 @@ export default function LeadDetallePage() {
     setAccionAbierta(null);
     setEnviando(false);
     refrescarPendientes();
+    cargar();
+  }
+
+  /** El abono no necesita autorización: se guarda directo y marca al lead como apartado. */
+  async function enviarAbono() {
+    if (!usuario || !lead || monto <= 0 || !comprobanteUrl.trim()) return;
+    setEnviando(true);
+    await registrarAbono({
+      leadId: lead.id,
+      autorId: usuario.id,
+      autorNombre: usuario.nombre,
+      monto,
+      moneda,
+      comprobanteUrl: comprobanteUrl.trim(),
+      notas: texto.trim(),
+    });
+    setMonto(0);
+    setComprobanteUrl("");
+    setTexto("");
+    setAccionAbierta(null);
+    setEnviando(false);
     cargar();
   }
 
@@ -213,6 +231,11 @@ export default function LeadDetallePage() {
               </div>
             </div>
             <div className="flex flex-wrap items-center gap-2">
+              {lead.apartado && (
+                <span className="rounded-full bg-warning/10 px-3 py-1 text-xs font-medium text-warning">
+                  Apartado{lead.totalAbonado ? ` · $${lead.totalAbonado.toLocaleString("es-MX")} abonado` : ""}
+                </span>
+              )}
               {inactivo && (
                 <span className="rounded-full bg-danger/10 px-3 py-1 text-xs font-medium text-danger">
                   Requiere seguimiento
@@ -360,16 +383,22 @@ export default function LeadDetallePage() {
                       Cancelar
                     </button>
                     <button
-                      onClick={() =>
-                        accionAbierta === "NOTA" ? enviarNota() : enviarSolicitud(accionAbierta)
-                      }
+                      onClick={() => {
+                        if (accionAbierta === "NOTA") enviarNota();
+                        else if (accionAbierta === "PAGO") enviarPago();
+                        else enviarAbono();
+                      }}
                       disabled={
                         enviando ||
                         (accionAbierta !== "NOTA" && (monto <= 0 || !comprobanteUrl.trim()))
                       }
                       className="rounded-xl bg-primary px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
                     >
-                      {accionAbierta === "NOTA" ? "Guardar nota" : "Enviar a autorización"}
+                      {accionAbierta === "NOTA"
+                        ? "Guardar nota"
+                        : accionAbierta === "PAGO"
+                        ? "Enviar a autorización"
+                        : "Guardar abono"}
                     </button>
                   </div>
                 </div>
@@ -427,6 +456,16 @@ export default function LeadDetallePage() {
                         <span className="text-xs text-muted">{aFecha(n.creadoEn)?.toLocaleString("es-MX")}</span>
                       </div>
                       <p className="mt-1 text-sm text-muted">{n.texto}</p>
+                      {n.comprobanteUrl && (
+                        <a
+                          href={n.comprobanteUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="mt-1 inline-block text-xs text-primary hover:underline"
+                        >
+                          Ver comprobante
+                        </a>
+                      )}
                       <p className="mt-1 text-xs text-muted">por {n.autorNombre}</p>
                     </div>
                   ))}

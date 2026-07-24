@@ -26,6 +26,10 @@ export type LeadOverlay = {
   // esta es la forma de reflejar una renovación sin tocarlo.
   vencimientoSinergeticoOverride?: Timestamp | null;
   vencimientoLiveOverride?: Timestamp | null;
+  // El abono no pasa por autorización: se guarda directo y marca al lead
+  // como apartado para que resalte arriba de la lista del vendedor.
+  apartado?: boolean;
+  totalAbonado?: number;
   creadoEn?: Timestamp;
   actualizadoEn?: Timestamp;
 };
@@ -41,6 +45,8 @@ export type NotaLead = {
   tipo: AccionLead;
   texto: string;
   monto?: number;
+  moneda?: Moneda;
+  comprobanteUrl?: string;
   creadoEn: Timestamp;
 };
 

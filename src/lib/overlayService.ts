@@ -48,6 +48,8 @@ const OVERLAY_VACIO: LeadOverlay = {
   llamada: null,
   vencimientoSinergeticoOverride: null,
   vencimientoLiveOverride: null,
+  apartado: false,
+  totalAbonado: 0,
 };
 
 /** Crea el overlay la primera vez que alguien toca un lead; si ya existe, solo mergea. */

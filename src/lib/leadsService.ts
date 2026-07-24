@@ -1,7 +1,18 @@
-import { collection, doc, query, orderBy, getDocs, updateDoc, addDoc, Timestamp, writeBatch } from "firebase/firestore";
+import {
+  collection,
+  doc,
+  query,
+  orderBy,
+  getDocs,
+  updateDoc,
+  addDoc,
+  increment,
+  Timestamp,
+  writeBatch,
+} from "firebase/firestore";
 import { db } from "./firebase";
 import { Lead, NotaLead, SheetLead, LeadOverlay } from "./types";
-import { ACCIONES_LEAD, ACCION_LABEL, LLAMADA_LABEL, AccionLead, EstadoLlamada } from "./constants";
+import { ACCIONES_LEAD, ACCION_LABEL, LLAMADA_LABEL, AccionLead, EstadoLlamada, Moneda } from "./constants";
 import { obtenerLeadsDelSheet } from "./sheetService";
 import { obtenerOverlays, obtenerOverlay, asegurarOverlay, limpiarCacheOverlays, OVERLAY_VACIO } from "./overlayService";
 import { aFecha, vencimientoSinergetico, vencimientoLive } from "./membership";
@@ -34,6 +45,8 @@ function combinarLead(s: SheetLead, o: LeadOverlay): Lead {
     vendedorId: o.vendedorId ?? null,
     noContactar: o.noContactar ?? false,
     llamada: o.llamada ?? null,
+    apartado: o.apartado ?? false,
+    totalAbonado: o.totalAbonado ?? 0,
   };
 }
 
@@ -83,6 +96,8 @@ export async function listarLeads(filtros: FiltrosLeads) {
   }
 
   leads.sort((a, b) => {
+    // Los apartados (con abono dado) siempre van arriba, sin importar el orden por vencimiento.
+    if (a.apartado !== b.apartado) return a.apartado ? -1 : 1;
     const va = (a[campoVencimiento] ?? new Date(0)).getTime();
     const vb = (b[campoVencimiento] ?? new Date(0)).getTime();
     return filtros.estado === "ACTIVO" ? va - vb : vb - va;
@@ -172,6 +187,43 @@ export async function actualizarLlamada(
     monto: null,
     creadoEn: Timestamp.now(),
   });
+}
+
+/**
+ * El abono NO pasa por autorización del admin: se guarda directo en la
+ * línea de tiempo del lead y lo marca como "apartado" para que resalte
+ * arriba de la lista del vendedor. Se puede dar más de un abono por lead;
+ * todos quedan registrados y se van sumando a totalAbonado.
+ */
+export async function registrarAbono(params: {
+  leadId: string;
+  autorId: string;
+  autorNombre: string;
+  monto: number;
+  moneda: Moneda;
+  comprobanteUrl: string;
+  notas?: string;
+}) {
+  const ref = await asegurarOverlay(params.leadId);
+
+  await addDoc(collection(db, "leads", params.leadId, NOTAS), {
+    leadId: params.leadId,
+    autorId: params.autorId,
+    autorNombre: params.autorNombre,
+    tipo: ACCIONES_LEAD.ABONO,
+    texto: params.notas?.trim() || `${ACCION_LABEL.ABONO} de ${params.monto} ${params.moneda}`,
+    monto: params.monto,
+    moneda: params.moneda,
+    comprobanteUrl: params.comprobanteUrl,
+    creadoEn: Timestamp.now(),
+  });
+
+  await updateDoc(ref, {
+    apartado: true,
+    totalAbonado: increment(params.monto),
+    actualizadoEn: Timestamp.now(),
+  });
+  limpiarCacheOverlays();
 }
 
 /**
