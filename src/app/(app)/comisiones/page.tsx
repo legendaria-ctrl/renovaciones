@@ -34,6 +34,7 @@ export default function ComisionesPage() {
   const [productos, setProductos] = useState<Producto[]>([]);
   const [ventas, setVentas] = useState<SolicitudAbono[]>([]);
   const [cargando, setCargando] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [formAbierto, setFormAbierto] = useState(false);
   const [nombre, setNombre] = useState("");
   const [precioTotal, setPrecioTotal] = useState(0);
@@ -42,10 +43,16 @@ export default function ComisionesPage() {
 
   const cargar = useCallback(async () => {
     setCargando(true);
-    const [p, v] = await Promise.all([listarProductos(true), listarVentasAprobadas()]);
-    setProductos(p);
-    setVentas(v);
-    setCargando(false);
+    setError(null);
+    try {
+      const [p, v] = await Promise.all([listarProductos(true), listarVentasAprobadas()]);
+      setProductos(p);
+      setVentas(v);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No se pudo cargar la información.");
+    } finally {
+      setCargando(false);
+    }
   }, []);
 
   useEffect(() => {
@@ -126,6 +133,15 @@ export default function ComisionesPage() {
             </button>
           </div>
         </form>
+      )}
+
+      {error && (
+        <div className="flex items-center justify-between rounded-2xl bg-danger/10 px-4 py-3 text-sm text-danger">
+          <span>{error}</span>
+          <button onClick={cargar} className="font-medium underline">
+            Reintentar
+          </button>
+        </div>
       )}
 
       <div className="shell rounded-[1.75rem] p-2 diffused">

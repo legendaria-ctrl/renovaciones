@@ -60,17 +60,18 @@ export async function contarPendientes(): Promise<number> {
   return snap.data().count;
 }
 
-/** Ventas autorizadas (pagos aprobados) — la base del reporte de comisiones. */
+/**
+ * Ventas autorizadas (pagos aprobados) — la base del reporte de comisiones.
+ * Un solo "where" (sin combinar con orderBy en otro campo) para no depender
+ * de un índice compuesto en Firestore; el filtro por tipo y el orden se
+ * hacen en memoria, la colección es chica.
+ */
 export async function listarVentasAprobadas(): Promise<SolicitudAbono[]> {
-  const snap = await getDocs(
-    query(
-      collection(db, PENDIENTES),
-      where("estado", "==", ESTADOS_SOLICITUD.APROBADO),
-      where("tipo", "==", TIPOS_SOLICITUD.PAGO),
-      orderBy("resueltoEn", "desc")
-    )
-  );
-  return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as SolicitudAbono);
+  const snap = await getDocs(query(collection(db, PENDIENTES), where("estado", "==", ESTADOS_SOLICITUD.APROBADO)));
+  return snap.docs
+    .map((d) => ({ id: d.id, ...d.data() }) as SolicitudAbono)
+    .filter((s) => s.tipo === TIPOS_SOLICITUD.PAGO)
+    .sort((a, b) => (b.resueltoEn?.toMillis() ?? 0) - (a.resueltoEn?.toMillis() ?? 0));
 }
 
 export async function resolverSolicitud(

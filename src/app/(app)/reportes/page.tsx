@@ -18,12 +18,19 @@ export default function ReportesPage() {
   const [hasta, setHasta] = useState(hoyISO());
   const [resumen, setResumen] = useState<ResumenVendedor[] | null>(null);
   const [cargando, setCargando] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   async function buscar() {
     setCargando(true);
-    const actividad = await listarActividadRango(new Date(desde), new Date(`${hasta}T23:59:59`));
-    setResumen(resumirPorVendedor(actividad));
-    setCargando(false);
+    setError(null);
+    try {
+      const actividad = await listarActividadRango(new Date(desde), new Date(`${hasta}T23:59:59`));
+      setResumen(resumirPorVendedor(actividad));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No se pudo cargar el reporte.");
+    } finally {
+      setCargando(false);
+    }
   }
 
   return (
@@ -59,6 +66,8 @@ export default function ReportesPage() {
               {cargando ? "Buscando…" : "Buscar"}
             </button>
           </div>
+
+          {error && <p className="text-sm text-danger">{error}</p>}
 
           {resumen && (
             <div className="flex flex-col divide-y divide-silver/60">

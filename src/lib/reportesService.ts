@@ -6,6 +6,8 @@ import { ACCIONES_LEAD } from "./constants";
 /**
  * Actividad de renovación (pagos y abonos aprobados) de todos los vendedores
  * en un rango de fechas, vía collectionGroup sobre las notas de cada lead.
+ * Solo se filtra por fecha en la consulta (rango sobre un único campo, no
+ * necesita índice compuesto); el tipo se filtra en memoria.
  */
 export async function listarActividadRango(desde: Date, hasta: Date): Promise<NotaLead[]> {
   const snap = await getDocs(
@@ -13,11 +15,12 @@ export async function listarActividadRango(desde: Date, hasta: Date): Promise<No
       collectionGroup(db, "notas"),
       where("creadoEn", ">=", Timestamp.fromDate(desde)),
       where("creadoEn", "<=", Timestamp.fromDate(hasta)),
-      where("tipo", "in", [ACCIONES_LEAD.PAGO, ACCIONES_LEAD.APROBACION]),
       orderBy("creadoEn", "desc")
     )
   );
-  return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as NotaLead);
+  return snap.docs
+    .map((d) => ({ id: d.id, ...d.data() }) as NotaLead)
+    .filter((n) => n.tipo === ACCIONES_LEAD.PAGO || n.tipo === ACCIONES_LEAD.APROBACION);
 }
 
 export type ResumenVendedor = {
