@@ -44,6 +44,7 @@ export type Producto = {
   id: string;
   nombre: string;
   precioTotal: number;
+  moneda: Moneda;
   comisionPorVenta: number;
   activo: boolean;
   creadoEn: Timestamp;
@@ -92,6 +93,7 @@ export type SolicitudAbono = {
   productoId: string | null;
   productoNombre: string | null;
   productoComision: number | null; // snapshot al momento de la venta
+  productoMoneda: Moneda | null;
   notas: string;
   estado: EstadoSolicitud;
   creadoEn: Timestamp;

@@ -5,11 +5,13 @@ import { Plus } from "lucide-react";
 import { listarProductos, crearProducto, actualizarProducto } from "@/lib/productosService";
 import { listarVentasAprobadas } from "@/lib/pendientesService";
 import { aFecha } from "@/lib/membership";
+import { MONEDAS, Moneda } from "@/lib/constants";
 import { Producto, SolicitudAbono } from "@/lib/types";
 
 type ResumenVendedor = {
   vendedorId: string;
   vendedorNombre: string;
+  moneda: Moneda;
   ventas: number;
   totalComision: number;
 };
@@ -17,15 +19,18 @@ type ResumenVendedor = {
 function resumirPorVendedor(ventas: SolicitudAbono[]): ResumenVendedor[] {
   const mapa = new Map<string, ResumenVendedor>();
   for (const v of ventas) {
-    const actual = mapa.get(v.vendedorId) ?? {
+    const moneda = v.productoMoneda ?? MONEDAS.MXN;
+    const clave = `${v.vendedorId}_${moneda}`;
+    const actual = mapa.get(clave) ?? {
       vendedorId: v.vendedorId,
       vendedorNombre: v.vendedorNombre,
+      moneda,
       ventas: 0,
       totalComision: 0,
     };
     actual.ventas += 1;
     actual.totalComision += v.productoComision ?? 0;
-    mapa.set(v.vendedorId, actual);
+    mapa.set(clave, actual);
   }
   return Array.from(mapa.values()).sort((a, b) => b.totalComision - a.totalComision);
 }
@@ -38,6 +43,7 @@ export default function ComisionesPage() {
   const [formAbierto, setFormAbierto] = useState(false);
   const [nombre, setNombre] = useState("");
   const [precioTotal, setPrecioTotal] = useState(0);
+  const [moneda, setMoneda] = useState<Moneda>(MONEDAS.MXN);
   const [comisionPorVenta, setComisionPorVenta] = useState(0);
   const [guardando, setGuardando] = useState(false);
 
@@ -63,9 +69,10 @@ export default function ComisionesPage() {
     e.preventDefault();
     if (!nombre.trim() || precioTotal <= 0) return;
     setGuardando(true);
-    await crearProducto({ nombre: nombre.trim(), precioTotal, comisionPorVenta });
+    await crearProducto({ nombre: nombre.trim(), precioTotal, moneda, comisionPorVenta });
     setNombre("");
     setPrecioTotal(0);
+    setMoneda(MONEDAS.MXN);
     setComisionPorVenta(0);
     setFormAbierto(false);
     setGuardando(false);
@@ -78,7 +85,10 @@ export default function ComisionesPage() {
   }
 
   const resumen = resumirPorVendedor(ventas);
-  const totalComisionGeneral = resumen.reduce((s, r) => s + r.totalComision, 0);
+  const totalesPorMoneda = resumen.reduce<Record<string, number>>((acc, r) => {
+    acc[r.moneda] = (acc[r.moneda] ?? 0) + r.totalComision;
+    return acc;
+  }, {});
 
   return (
     <div className="flex flex-col gap-5">
@@ -113,6 +123,17 @@ export default function ComisionesPage() {
                 onChange={(e) => setPrecioTotal(parseFloat(e.target.value) || 0)}
                 className="rounded-xl border border-silver-deep/60 bg-surface-2 px-4 py-2.5 text-sm outline-none"
               />
+            </label>
+            <label className="flex flex-col gap-1.5">
+              <span className="text-xs font-medium uppercase tracking-wider text-muted">Moneda</span>
+              <select
+                value={moneda}
+                onChange={(e) => setMoneda(e.target.value as Moneda)}
+                className="rounded-xl border border-silver-deep/60 bg-surface-2 px-4 py-2.5 text-sm outline-none"
+              >
+                <option value={MONEDAS.MXN}>MXN</option>
+                <option value={MONEDAS.USD}>USD</option>
+              </select>
             </label>
             <label className="flex flex-col gap-1.5">
               <span className="text-xs font-medium uppercase tracking-wider text-muted">Comisión por venta</span>
@@ -158,8 +179,8 @@ export default function ComisionesPage() {
                   <div>
                     <p className="text-sm font-medium text-foreground">{p.nombre}</p>
                     <p className="text-xs text-muted">
-                      Precio ${p.precioTotal.toLocaleString("es-MX")} · Comisión $
-                      {p.comisionPorVenta.toLocaleString("es-MX")}
+                      Precio ${p.precioTotal.toLocaleString("es-MX")} {p.moneda} · Comisión $
+                      {p.comisionPorVenta.toLocaleString("es-MX")} {p.moneda}
                     </p>
                   </div>
                   <button
@@ -179,10 +200,12 @@ export default function ComisionesPage() {
 
       <div className="shell rounded-[1.75rem] p-2 diffused">
         <div className="core flex flex-col gap-1 rounded-[calc(1.75rem-0.5rem)] p-4">
-          <div className="flex items-center justify-between px-2 pb-2">
+          <div className="flex flex-wrap items-center justify-between gap-2 px-2 pb-2">
             <h2 className="text-sm font-semibold text-foreground">Ventas por vendedor</h2>
             <span className="text-xs text-muted">
-              Total comisiones: ${totalComisionGeneral.toLocaleString("es-MX")}
+              {Object.entries(totalesPorMoneda)
+                .map(([m, total]) => `${total.toLocaleString("es-MX")} ${m}`)
+                .join(" · ") || "Total comisiones: $0"}
             </span>
           </div>
           {cargando ? (
@@ -192,10 +215,11 @@ export default function ComisionesPage() {
           ) : (
             <div className="flex flex-col divide-y divide-silver/60">
               {resumen.map((r) => (
-                <div key={r.vendedorId} className="flex items-center justify-between py-3">
+                <div key={`${r.vendedorId}_${r.moneda}`} className="flex items-center justify-between py-3">
                   <span className="text-sm font-medium text-foreground">{r.vendedorNombre}</span>
                   <span className="text-sm text-muted">
-                    {r.ventas} venta{r.ventas === 1 ? "" : "s"} · ${r.totalComision.toLocaleString("es-MX")}
+                    {r.ventas} venta{r.ventas === 1 ? "" : "s"} · ${r.totalComision.toLocaleString("es-MX")}{" "}
+                    {r.moneda}
                   </span>
                 </div>
               ))}
@@ -221,7 +245,7 @@ export default function ComisionesPage() {
                     </p>
                   </div>
                   <span className="text-sm text-success">
-                    Comisión ${v.productoComision?.toLocaleString("es-MX") ?? 0}
+                    Comisión ${v.productoComision?.toLocaleString("es-MX") ?? 0} {v.productoMoneda ?? ""}
                   </span>
                 </div>
               ))}

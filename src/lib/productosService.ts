@@ -1,6 +1,7 @@
 import { collection, doc, getDocs, query, orderBy, addDoc, updateDoc, Timestamp } from "firebase/firestore";
 import { db } from "./firebase";
 import { Producto } from "./types";
+import { Moneda } from "./constants";
 
 const PRODUCTOS = "productos";
 
@@ -17,14 +18,19 @@ export async function listarProductosActivos(): Promise<Producto[]> {
   return (await listarProductos()).filter((p) => p.activo);
 }
 
-export async function crearProducto(datos: { nombre: string; precioTotal: number; comisionPorVenta: number }) {
+export async function crearProducto(datos: {
+  nombre: string;
+  precioTotal: number;
+  moneda: Moneda;
+  comisionPorVenta: number;
+}) {
   await addDoc(collection(db, PRODUCTOS), { ...datos, activo: true, creadoEn: Timestamp.now() });
   cache = null;
 }
 
 export async function actualizarProducto(
   id: string,
-  datos: Partial<Pick<Producto, "nombre" | "precioTotal" | "comisionPorVenta" | "activo">>
+  datos: Partial<Pick<Producto, "nombre" | "precioTotal" | "moneda" | "comisionPorVenta" | "activo">>
 ) {
   await updateDoc(doc(db, PRODUCTOS, id), datos);
   cache = null;

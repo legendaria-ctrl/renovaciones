@@ -105,8 +105,9 @@ export default function LeadDetallePage() {
 
   function elegirProducto(pid: string) {
     setProductoId(pid);
+    const p = productos.find((x) => x.id === pid);
+    if (p) setMoneda(p.moneda);
     if (accionAbierta === "PAGO") {
-      const p = productos.find((x) => x.id === pid);
       setMonto(p?.precioTotal ?? 0);
     }
   }
@@ -169,6 +170,7 @@ export default function LeadDetallePage() {
       productoId: productoSeleccionado.id,
       productoNombre: productoSeleccionado.nombre,
       productoComision: productoSeleccionado.comisionPorVenta,
+      productoMoneda: productoSeleccionado.moneda,
       notas: texto.trim(),
     });
     setAccionAbierta(null);
@@ -393,7 +395,7 @@ export default function LeadDetallePage() {
                           <option value="">Selecciona un producto…</option>
                           {productos.map((p) => (
                             <option key={p.id} value={p.id}>
-                              {p.nombre} · ${p.precioTotal.toLocaleString("es-MX")}
+                              {p.nombre} · ${p.precioTotal.toLocaleString("es-MX")} {p.moneda}
                             </option>
                           ))}
                         </select>
