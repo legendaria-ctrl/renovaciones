@@ -100,7 +100,7 @@ export default function ComisionesPage() {
     setEditPrecio(p.precioTotal);
     setEditMoneda(p.moneda);
     setEditComision(p.comisionPorVenta);
-    setEditComisionMoneda(p.comisionMoneda);
+    setEditComisionMoneda(p.comisionMoneda ?? p.moneda);
   }
 
   async function guardarEdicion(id: string) {
