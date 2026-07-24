@@ -107,9 +107,20 @@ export async function listarLeads(filtros: FiltrosLeads) {
   leads.sort((a, b) => {
     // Los apartados (con abono dado) siempre van arriba, sin importar el orden por vencimiento.
     if (a.apartado !== b.apartado) return a.apartado ? -1 : 1;
+
     const va = (a[campoVencimiento] ?? new Date(0)).getTime();
     const vb = (b[campoVencimiento] ?? new Date(0)).getTime();
-    return filtros.estado === "ACTIVO" ? va - vb : vb - va;
+
+    if (filtros.estado === "ACTIVO") return va - vb;
+    if (filtros.estado === "VENCIDO") return vb - va;
+
+    // Sin filtro de estado (pestaña "Todos"): primero los vencidos, más
+    // antiguos primero; luego los activos, los que vencen más pronto primero.
+    const ahoraMs = ahora.getTime();
+    const aVencido = va < ahoraMs;
+    const bVencido = vb < ahoraMs;
+    if (aVencido !== bVencido) return aVencido ? -1 : 1;
+    return va - vb;
   });
 
   const pagina = filtros.pagina ?? 0;
