@@ -253,7 +253,6 @@ export default function LeadsPage() {
                         <p className="truncate text-xs text-muted">
                           {lead.correo ?? lead.telefono ?? "sin contacto"}
                         </p>
-                        <p className="truncate text-xs text-muted">{textoVencimiento(venc)}</p>
                         {puedeAsignar(usuario?.rol) && (
                           <p className="truncate text-xs text-muted">
                             {lead.vendedorId
@@ -261,6 +260,9 @@ export default function LeadsPage() {
                               : "Sin asignar"}
                           </p>
                         )}
+                      </div>
+                      <div className="w-28 flex-none truncate text-center text-xs text-muted sm:w-40">
+                        {textoVencimiento(venc)}
                       </div>
                       <div className="flex flex-none items-center gap-2">
                         <StatusBadge estado={est} />
