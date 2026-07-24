@@ -1,43 +1,46 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { Plus, Pencil, X, Check } from "lucide-react";
+import { Plus, Pencil, X, Check, ChevronDown } from "lucide-react";
 import { listarProductos, crearProducto, actualizarProducto } from "@/lib/productosService";
 import { listarVentasAprobadas } from "@/lib/pendientesService";
+import { listarVendedoresActivos } from "@/lib/vendedoresService";
 import { aFecha } from "@/lib/membership";
 import { MONEDAS, Moneda } from "@/lib/constants";
-import { Producto, SolicitudAbono } from "@/lib/types";
+import { Producto, SolicitudAbono, Usuario } from "@/lib/types";
 
 type ResumenVendedor = {
   vendedorId: string;
   vendedorNombre: string;
-  moneda: Moneda;
-  ventas: number;
-  totalComision: number;
+  ventas: SolicitudAbono[];
+  totalesPorMoneda: Record<string, number>;
 };
 
-function resumirPorVendedor(ventas: SolicitudAbono[]): ResumenVendedor[] {
+function resumirPorVendedor(ventas: SolicitudAbono[], vendedores: Usuario[]): ResumenVendedor[] {
   const mapa = new Map<string, ResumenVendedor>();
+  for (const u of vendedores) {
+    mapa.set(u.id, { vendedorId: u.id, vendedorNombre: u.nombre, ventas: [], totalesPorMoneda: {} });
+  }
   for (const v of ventas) {
     const moneda = v.productoComisionMoneda ?? v.productoMoneda ?? MONEDAS.MXN;
-    const clave = `${v.vendedorId}_${moneda}`;
-    const actual = mapa.get(clave) ?? {
+    const actual = mapa.get(v.vendedorId) ?? {
       vendedorId: v.vendedorId,
       vendedorNombre: v.vendedorNombre,
-      moneda,
-      ventas: 0,
-      totalComision: 0,
+      ventas: [],
+      totalesPorMoneda: {},
     };
-    actual.ventas += 1;
-    actual.totalComision += v.productoComision ?? 0;
-    mapa.set(clave, actual);
+    actual.ventas.push(v);
+    actual.totalesPorMoneda[moneda] = (actual.totalesPorMoneda[moneda] ?? 0) + (v.productoComision ?? 0);
+    mapa.set(v.vendedorId, actual);
   }
-  return Array.from(mapa.values()).sort((a, b) => b.totalComision - a.totalComision);
+  return Array.from(mapa.values()).sort((a, b) => b.ventas.length - a.ventas.length);
 }
 
 export default function ComisionesPage() {
   const [productos, setProductos] = useState<Producto[]>([]);
   const [ventas, setVentas] = useState<SolicitudAbono[]>([]);
+  const [vendedores, setVendedores] = useState<Usuario[]>([]);
+  const [expandidoId, setExpandidoId] = useState<string | null>(null);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [formAbierto, setFormAbierto] = useState(false);
@@ -63,9 +66,10 @@ export default function ComisionesPage() {
     setCargando(true);
     setError(null);
     try {
-      const [p, v] = await Promise.all([listarProductos(true), listarVentasAprobadas()]);
+      const [p, v, u] = await Promise.all([listarProductos(true), listarVentasAprobadas(), listarVendedoresActivos()]);
       setProductos(p);
       setVentas(v);
+      setVendedores(u);
     } catch (err) {
       setError(err instanceof Error ? err.message : "No se pudo cargar la información.");
     } finally {
@@ -129,9 +133,11 @@ export default function ComisionesPage() {
     return true;
   });
 
-  const resumen = resumirPorVendedor(ventasFiltradas);
+  const resumen = resumirPorVendedor(ventasFiltradas, vendedores);
   const totalesPorMoneda = resumen.reduce<Record<string, number>>((acc, r) => {
-    acc[r.moneda] = (acc[r.moneda] ?? 0) + r.totalComision;
+    for (const [m, total] of Object.entries(r.totalesPorMoneda)) {
+      acc[m] = (acc[m] ?? 0) + total;
+    }
     return acc;
   }, {});
 
@@ -367,20 +373,59 @@ export default function ComisionesPage() {
           {cargando ? (
             <p className="py-8 text-center text-sm text-muted">Cargando…</p>
           ) : resumen.length === 0 ? (
-            <p className="py-8 text-center text-sm text-muted">
-              {desde || hasta ? "Sin ventas en ese rango." : "Aún no hay ventas autorizadas."}
-            </p>
+            <p className="py-8 text-center text-sm text-muted">Aún no hay vendedores activos.</p>
           ) : (
             <div className="flex flex-col divide-y divide-silver/60">
-              {resumen.map((r) => (
-                <div key={`${r.vendedorId}_${r.moneda}`} className="flex items-center justify-between py-3">
-                  <span className="text-sm font-medium text-foreground">{r.vendedorNombre}</span>
-                  <span className="text-sm text-muted">
-                    {r.ventas} venta{r.ventas === 1 ? "" : "s"} · ${r.totalComision.toLocaleString("es-MX")}{" "}
-                    {r.moneda}
-                  </span>
-                </div>
-              ))}
+              {resumen.map((r) => {
+                const abierto = expandidoId === r.vendedorId;
+                const totalesTexto =
+                  Object.entries(r.totalesPorMoneda)
+                    .map(([m, total]) => `$${total.toLocaleString("es-MX")} ${m}`)
+                    .join(" · ") || "$0";
+                return (
+                  <div key={r.vendedorId} className="py-2">
+                    <button
+                      onClick={() => setExpandidoId(abierto ? null : r.vendedorId)}
+                      className="flex w-full items-center justify-between gap-3 rounded-xl px-2 py-2 text-left transition-all duration-500 ease-spring hover:bg-surface-2"
+                    >
+                      <span className="flex items-center gap-2 text-sm font-medium text-foreground">
+                        <ChevronDown
+                          className={`h-4 w-4 text-muted transition-transform duration-300 ${abierto ? "rotate-180" : ""}`}
+                          strokeWidth={1.75}
+                        />
+                        {r.vendedorNombre}
+                      </span>
+                      <span className="text-sm text-muted">
+                        {r.ventas.length} venta{r.ventas.length === 1 ? "" : "s"} · {totalesTexto}
+                      </span>
+                    </button>
+                    {abierto && (
+                      <div className="mt-1 flex flex-col gap-2 rounded-xl bg-surface-2 px-3 py-3">
+                        {r.ventas.length === 0 ? (
+                          <p className="py-2 text-center text-xs text-muted">
+                            {desde || hasta ? "Sin ventas en ese rango." : "Sin ventas todavía."}
+                          </p>
+                        ) : (
+                          r.ventas.map((v) => (
+                            <div key={v.id} className="flex flex-wrap items-center justify-between gap-2 text-sm">
+                              <div>
+                                <p className="font-medium text-foreground">{v.leadNombre}</p>
+                                <p className="text-xs text-muted">
+                                  {v.productoNombre ?? "—"} · {aFecha(v.resueltoEn)?.toLocaleDateString("es-MX")}
+                                </p>
+                              </div>
+                              <span className="text-success">
+                                ${v.productoComision?.toLocaleString("es-MX") ?? 0}{" "}
+                                {v.productoComisionMoneda ?? v.productoMoneda ?? ""}
+                              </span>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>
