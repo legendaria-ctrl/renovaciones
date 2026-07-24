@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { Plus } from "lucide-react";
+import { Plus, Pencil, X, Check } from "lucide-react";
 import { listarProductos, crearProducto, actualizarProducto } from "@/lib/productosService";
 import { listarVentasAprobadas } from "@/lib/pendientesService";
 import { aFecha } from "@/lib/membership";
@@ -47,6 +47,13 @@ export default function ComisionesPage() {
   const [comisionPorVenta, setComisionPorVenta] = useState(0);
   const [guardando, setGuardando] = useState(false);
 
+  const [editandoId, setEditandoId] = useState<string | null>(null);
+  const [editNombre, setEditNombre] = useState("");
+  const [editPrecio, setEditPrecio] = useState(0);
+  const [editMoneda, setEditMoneda] = useState<Moneda>(MONEDAS.MXN);
+  const [editComision, setEditComision] = useState(0);
+  const [guardandoEdit, setGuardandoEdit] = useState(false);
+
   const cargar = useCallback(async () => {
     setCargando(true);
     setError(null);
@@ -81,6 +88,28 @@ export default function ComisionesPage() {
 
   async function toggleActivo(p: Producto) {
     await actualizarProducto(p.id, { activo: !p.activo });
+    cargar();
+  }
+
+  function abrirEdicion(p: Producto) {
+    setEditandoId(p.id);
+    setEditNombre(p.nombre);
+    setEditPrecio(p.precioTotal);
+    setEditMoneda(p.moneda);
+    setEditComision(p.comisionPorVenta);
+  }
+
+  async function guardarEdicion(id: string) {
+    if (!editNombre.trim() || editPrecio <= 0) return;
+    setGuardandoEdit(true);
+    await actualizarProducto(id, {
+      nombre: editNombre.trim(),
+      precioTotal: editPrecio,
+      moneda: editMoneda,
+      comisionPorVenta: editComision,
+    });
+    setEditandoId(null);
+    setGuardandoEdit(false);
     cargar();
   }
 
@@ -174,25 +203,85 @@ export default function ComisionesPage() {
             <p className="py-8 text-center text-sm text-muted">Aún no hay productos.</p>
           ) : (
             <div className="flex flex-col divide-y divide-silver/60">
-              {productos.map((p) => (
-                <div key={p.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
-                  <div>
-                    <p className="text-sm font-medium text-foreground">{p.nombre}</p>
-                    <p className="text-xs text-muted">
-                      Precio ${p.precioTotal.toLocaleString("es-MX")} {p.moneda} · Comisión $
-                      {p.comisionPorVenta.toLocaleString("es-MX")} {p.moneda}
-                    </p>
+              {productos.map((p) =>
+                editandoId === p.id ? (
+                  <div key={p.id} className="grid grid-cols-1 gap-3 py-3 sm:grid-cols-4">
+                    <input
+                      value={editNombre}
+                      onChange={(e) => setEditNombre(e.target.value)}
+                      className="rounded-xl border border-silver-deep/60 bg-surface-2 px-3 py-2 text-sm outline-none sm:col-span-4"
+                      placeholder="Nombre del producto"
+                    />
+                    <input
+                      type="number"
+                      min={1}
+                      value={editPrecio || ""}
+                      onChange={(e) => setEditPrecio(parseFloat(e.target.value) || 0)}
+                      className="rounded-xl border border-silver-deep/60 bg-surface-2 px-3 py-2 text-sm outline-none"
+                      placeholder="Precio total"
+                    />
+                    <select
+                      value={editMoneda}
+                      onChange={(e) => setEditMoneda(e.target.value as Moneda)}
+                      className="rounded-xl border border-silver-deep/60 bg-surface-2 px-3 py-2 text-sm outline-none"
+                    >
+                      <option value={MONEDAS.MXN}>MXN</option>
+                      <option value={MONEDAS.USD}>USD</option>
+                    </select>
+                    <input
+                      type="number"
+                      min={0}
+                      value={editComision || ""}
+                      onChange={(e) => setEditComision(parseFloat(e.target.value) || 0)}
+                      className="rounded-xl border border-silver-deep/60 bg-surface-2 px-3 py-2 text-sm outline-none"
+                      placeholder="Comisión por venta"
+                    />
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => guardarEdicion(p.id)}
+                        disabled={guardandoEdit}
+                        className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-primary py-2 text-sm font-medium text-white disabled:opacity-50"
+                      >
+                        <Check className="h-4 w-4" strokeWidth={1.75} />
+                        Guardar
+                      </button>
+                      <button
+                        onClick={() => setEditandoId(null)}
+                        className="flex items-center justify-center rounded-xl border border-silver-deep/60 bg-surface-2 px-3 text-muted"
+                      >
+                        <X className="h-4 w-4" strokeWidth={1.75} />
+                      </button>
+                    </div>
                   </div>
-                  <button
-                    onClick={() => toggleActivo(p)}
-                    className={`rounded-xl px-3 py-2 text-sm font-medium transition-all duration-500 ease-spring active:scale-[0.98] ${
-                      p.activo ? "bg-success/10 text-success" : "bg-surface-2 text-muted"
-                    }`}
-                  >
-                    {p.activo ? "Activo" : "Inactivo"}
-                  </button>
-                </div>
-              ))}
+                ) : (
+                  <div key={p.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
+                    <div>
+                      <p className="text-sm font-medium text-foreground">{p.nombre}</p>
+                      <p className="text-xs text-muted">
+                        Precio ${p.precioTotal.toLocaleString("es-MX")} {p.moneda} · Comisión $
+                        {p.comisionPorVenta.toLocaleString("es-MX")} {p.moneda}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => abrirEdicion(p)}
+                        title="Editar producto"
+                        className="flex h-9 w-9 items-center justify-center rounded-xl border border-silver-deep/60 bg-surface-2 text-muted transition-all duration-500 ease-spring hover:text-foreground active:scale-[0.98]"
+                      >
+                        <Pencil className="h-4 w-4" strokeWidth={1.75} />
+                      </button>
+                      <button
+                        onClick={() => toggleActivo(p)}
+                        className={`rounded-xl px-3 py-2 text-sm font-medium transition-all duration-500 ease-spring active:scale-[0.98] ${
+                          p.activo ? "bg-success/10 text-success" : "bg-surface-2 text-muted"
+                        }`}
+                      >
+                        {p.activo ? "Activo" : "Inactivo"}
+                      </button>
+                    </div>
+                  </div>
+                )
+              )}
             </div>
           )}
         </div>
