@@ -15,6 +15,7 @@ import {
   PhoneCall,
   Activity,
   Undo2,
+  MessageCircle,
 } from "lucide-react";
 import {
   obtenerLead,
@@ -663,6 +664,33 @@ export default function LeadDetallePage() {
 
           {tab === "SEGUIMIENTO" && (
             <div className="flex flex-col gap-4">
+              {lead.telefono && (
+                <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-surface-2 p-4">
+                  <div>
+                    <p className="text-xs font-medium uppercase tracking-wider text-muted">Teléfono</p>
+                    <p className="mt-1 text-sm font-medium text-foreground">{lead.telefono}</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <a
+                      href={`tel:${lead.telefono.replace(/\s+/g, "")}`}
+                      className="flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-medium text-white transition-all duration-500 ease-spring active:scale-[0.98]"
+                    >
+                      <PhoneCall className="h-4 w-4" strokeWidth={1.75} />
+                      Llamar
+                    </a>
+                    <a
+                      href={`https://wa.me/${lead.telefono.replace(/\D/g, "")}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="flex items-center gap-2 rounded-xl bg-success/10 px-4 py-2.5 text-sm font-medium text-success transition-all duration-500 ease-spring active:scale-[0.98]"
+                    >
+                      <MessageCircle className="h-4 w-4" strokeWidth={1.75} />
+                      WhatsApp
+                    </a>
+                  </div>
+                </div>
+              )}
+
               <div className="rounded-2xl bg-surface-2 p-4">
                 <p className="text-xs font-medium uppercase tracking-wider text-muted">Estado de la llamada</p>
                 <div className="mt-2 flex items-center justify-between">
