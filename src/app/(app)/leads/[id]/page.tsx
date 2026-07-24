@@ -127,7 +127,11 @@ export default function LeadDetallePage() {
   async function enviarSolicitud(tipo: "PAGO" | "ABONO") {
     if (!usuario || !lead || monto <= 0 || !comprobanteUrl.trim()) return;
     setEnviando(true);
+    // Un "Pago/Renovación" siempre da 1 año de ambas membresías; el abono no
+    // renueva nada por sí solo, así que ahí sí importa a cuál aplica.
     const tipoMembresiaKey = lead.liveMeses ? TIPOS_MEMBRESIA.LIVE : TIPOS_MEMBRESIA.SINERGETICO;
+    const tipoMembresiaLabel =
+      tipo === "PAGO" ? "Club Sinergético + Club Sinergético Live (1 año)" : MEMBRESIA_LABEL[tipoMembresiaKey];
     await crearSolicitud({
       leadId: lead.id,
       leadNombre: lead.nombre,
@@ -137,7 +141,7 @@ export default function LeadDetallePage() {
       monto,
       moneda,
       comprobanteUrl: comprobanteUrl.trim(),
-      tipoMembresia: MEMBRESIA_LABEL[tipoMembresiaKey],
+      tipoMembresia: tipoMembresiaLabel,
       tipoMembresiaKey,
       liveMeses: lead.liveMeses,
       notas: texto.trim(),

@@ -51,7 +51,10 @@ export async function listarLeads(filtros: FiltrosLeads) {
   let leads: Lead[] = combinarConOverlay(sheetLeads, overlays);
 
   if (filtros.membresia === "LIVE") {
-    leads = leads.filter((l) => l.liveMeses != null);
+    // liveMeses != null cubre a quien ya la traía del sheet; vencimientoLive
+    // != null también incluye a quien la ganó por una renovación aprobada
+    // (toda renovación da 1 año de Live, aunque nunca la hubiera comprado).
+    leads = leads.filter((l) => l.liveMeses != null || l.vencimientoLive != null);
   }
 
   if (filtros.soloSinAsignar) {
@@ -171,25 +174,20 @@ export async function actualizarLlamada(
   });
 }
 
-/** Se llama al aprobar un "Pago/Renovación": extiende el vencimiento efectivo sin tocar el sheet. */
-export async function aplicarRenovacionManual(
-  leadId: string,
-  tipoMembresia: "SINERGETICO" | "LIVE",
-  liveMeses: number | null
-) {
+/**
+ * Se llama al aprobar un "Pago/Renovación": toda renovación da 1 año de
+ * Club Sinergético y 1 año de Club Sinergético Live, sin importar cuál de
+ * las dos tenía el lead antes. Extiende el vencimiento efectivo sin tocar
+ * el sheet (overlay en Firestore).
+ */
+export async function aplicarRenovacionManual(leadId: string) {
   const ref = await asegurarOverlay(leadId);
   const ahora = new Date();
-  if (tipoMembresia === "LIVE" && liveMeses) {
-    await updateDoc(ref, {
-      vencimientoLiveOverride: Timestamp.fromDate(vencimientoLive(ahora, liveMeses)),
-      actualizadoEn: Timestamp.now(),
-    });
-  } else {
-    await updateDoc(ref, {
-      vencimientoSinergeticoOverride: Timestamp.fromDate(vencimientoSinergetico(ahora)),
-      actualizadoEn: Timestamp.now(),
-    });
-  }
+  await updateDoc(ref, {
+    vencimientoSinergeticoOverride: Timestamp.fromDate(vencimientoSinergetico(ahora)),
+    vencimientoLiveOverride: Timestamp.fromDate(vencimientoLive(ahora, 12)),
+    actualizadoEn: Timestamp.now(),
+  });
   limpiarCacheOverlays();
 }
 

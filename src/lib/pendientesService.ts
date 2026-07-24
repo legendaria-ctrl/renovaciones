@@ -73,7 +73,7 @@ export async function resolverSolicitud(
   const esPago = solicitud.tipo === TIPOS_SOLICITUD.PAGO;
 
   if (aprobar && esPago) {
-    await aplicarRenovacionManual(solicitud.leadId, solicitud.tipoMembresiaKey, solicitud.liveMeses);
+    await aplicarRenovacionManual(solicitud.leadId);
   }
 
   await registrarAccionLead({
