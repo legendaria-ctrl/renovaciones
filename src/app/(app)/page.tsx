@@ -310,6 +310,7 @@ export default function LeadsPage() {
       {modalAbierto && (
         <AsignarLeadsModal
           vendedores={vendedores}
+          totalDisponible={leadIdsParaAsignar.length > 0 ? leadIdsParaAsignar.length : seleccionados.size}
           onCancelar={() => {
             setModalAbierto(false);
             setLeadIdsParaAsignar([]);

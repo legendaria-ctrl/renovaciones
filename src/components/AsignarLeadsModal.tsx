@@ -6,10 +6,12 @@ import { Usuario } from "@/lib/types";
 
 export function AsignarLeadsModal({
   vendedores,
+  totalDisponible,
   onCancelar,
   onConfirmar,
 }: {
   vendedores: Usuario[];
+  totalDisponible: number;
   onCancelar: () => void;
   onConfirmar: (asignaciones: { vendedorId: string; cantidad: number }[]) => void | Promise<void>;
 }) {
@@ -18,18 +20,20 @@ export function AsignarLeadsModal({
   const [enviando, setEnviando] = useState(false);
 
   const seleccionados = vendedores.filter((v) => v.id in cantidades);
+  const totalAsignado = seleccionados.reduce((acc, v) => acc + (cantidades[v.id] || 0), 0);
+  const excedeDisponible = totalAsignado > totalDisponible;
 
   function toggle(id: string) {
     setCantidades((prev) => {
       const next = { ...prev };
       if (id in next) delete next[id];
-      else next[id] = 5;
+      else next[id] = Math.min(5, totalDisponible);
       return next;
     });
   }
 
   function setCantidad(id: string, cantidad: number) {
-    setCantidades((prev) => ({ ...prev, [id]: cantidad }));
+    setCantidades((prev) => ({ ...prev, [id]: Math.min(cantidad, totalDisponible) }));
   }
 
   async function confirmar() {
@@ -100,6 +104,7 @@ export function AsignarLeadsModal({
                     <input
                       type="number"
                       min={1}
+                      max={totalDisponible}
                       value={cantidades[v.id] || ""}
                       onChange={(e) => setCantidad(v.id, parseInt(e.target.value, 10) || 1)}
                       className="w-24 flex-none rounded-xl border border-silver-deep/60 bg-surface-2 px-3 py-2 text-sm text-foreground outline-none"
@@ -107,8 +112,10 @@ export function AsignarLeadsModal({
                   </div>
                 ))}
               </div>
-              <p className="text-xs text-muted">
-                Total a asignar: {seleccionados.reduce((acc, v) => acc + (cantidades[v.id] || 0), 0)} leads
+              <p className={`text-xs ${excedeDisponible ? "text-danger" : "text-muted"}`}>
+                Total a asignar: {totalAsignado} de {totalDisponible} lead{totalDisponible === 1 ? "" : "s"}{" "}
+                disponible{totalDisponible === 1 ? "" : "s"}
+                {excedeDisponible && " — sobran cupos, no hay suficientes leads para repartir todo eso"}
               </p>
             </div>
           )}
