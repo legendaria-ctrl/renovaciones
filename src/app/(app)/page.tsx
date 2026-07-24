@@ -95,8 +95,8 @@ export default function LeadsPage() {
     });
   }
 
-  async function confirmarAsignacion(vendedorIds: string[], cantidadPorVendedor: number) {
-    await asignarLeadsEnLote(Array.from(seleccionados), vendedorIds, cantidadPorVendedor);
+  async function confirmarAsignacion(asignaciones: { vendedorId: string; cantidad: number }[]) {
+    await asignarLeadsEnLote(Array.from(seleccionados), asignaciones);
     setModalAbierto(false);
     setSeleccionActiva(false);
     setSeleccionados(new Set());

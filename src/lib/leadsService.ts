@@ -386,12 +386,15 @@ export async function limpiarApartado(leadId: string) {
   limpiarCacheOverlays();
 }
 
-export async function asignarLeadsEnLote(leadIds: string[], vendedorIds: string[], cantidadPorVendedor: number) {
+export async function asignarLeadsEnLote(
+  leadIds: string[],
+  asignaciones: { vendedorId: string; cantidad: number }[]
+) {
   const batch = writeBatch(db);
   let cursor = 0;
-  for (const vendedorId of vendedorIds) {
-    const asignados = leadIds.slice(cursor, cursor + cantidadPorVendedor);
-    cursor += cantidadPorVendedor;
+  for (const { vendedorId, cantidad } of asignaciones) {
+    const asignados = leadIds.slice(cursor, cursor + cantidad);
+    cursor += cantidad;
     for (const leadId of asignados) {
       batch.set(
         doc(db, "leads", leadId),

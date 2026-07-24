@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { X } from "lucide-react";
+import { X, ChevronDown } from "lucide-react";
 import { Usuario } from "@/lib/types";
 
 export function AsignarLeadsModal({
@@ -11,24 +11,32 @@ export function AsignarLeadsModal({
 }: {
   vendedores: Usuario[];
   onCancelar: () => void;
-  onConfirmar: (vendedorIds: string[], cantidadPorVendedor: number) => void | Promise<void>;
+  onConfirmar: (asignaciones: { vendedorId: string; cantidad: number }[]) => void | Promise<void>;
 }) {
-  const [activos, setActivos] = useState<Set<string>>(new Set());
-  const [cantidad, setCantidad] = useState(5);
+  const [cantidades, setCantidades] = useState<Record<string, number>>({});
+  const [menuAbierto, setMenuAbierto] = useState(false);
   const [enviando, setEnviando] = useState(false);
 
+  const seleccionados = vendedores.filter((v) => v.id in cantidades);
+
   function toggle(id: string) {
-    setActivos((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
+    setCantidades((prev) => {
+      const next = { ...prev };
+      if (id in next) delete next[id];
+      else next[id] = 5;
       return next;
     });
   }
 
+  function setCantidad(id: string, cantidad: number) {
+    setCantidades((prev) => ({ ...prev, [id]: cantidad }));
+  }
+
   async function confirmar() {
     setEnviando(true);
-    await onConfirmar(Array.from(activos), cantidad);
+    await onConfirmar(
+      seleccionados.map((v) => ({ vendedorId: v.id, cantidad: Math.max(1, cantidades[v.id] || 1) }))
+    );
     setEnviando(false);
   }
 
@@ -43,48 +51,71 @@ export function AsignarLeadsModal({
             </button>
           </div>
 
-          <div>
-            <p className="mb-2 text-xs font-medium uppercase tracking-wider text-muted">
-              Vendedores participantes
-            </p>
-            <div className="flex flex-col gap-1 max-h-56 overflow-y-auto">
-              {vendedores.map((v) => (
-                <label
-                  key={v.id}
-                  className="flex items-center gap-3 rounded-xl px-3 py-2 hover:bg-surface-2"
-                >
-                  <input
-                    type="checkbox"
-                    checked={activos.has(v.id)}
-                    onChange={() => toggle(v.id)}
-                    className="h-4 w-4 accent-primary"
-                  />
-                  <span className="text-sm text-foreground">{v.nombre}</span>
-                  <span className="ml-auto text-[11px] uppercase tracking-wider text-muted">{v.rol}</span>
-                </label>
-              ))}
-              {vendedores.length === 0 && (
-                <p className="px-3 py-2 text-sm text-muted">No hay vendedores activos.</p>
-              )}
-            </div>
+          <div className="relative">
+            <p className="mb-2 text-xs font-medium uppercase tracking-wider text-muted">Vendedores</p>
+            <button
+              type="button"
+              onClick={() => setMenuAbierto((v) => !v)}
+              className="flex w-full items-center justify-between rounded-2xl border border-silver-deep/60 bg-surface-2 px-4 py-2.5 text-sm text-foreground"
+            >
+              {seleccionados.length === 0
+                ? "Selecciona uno o varios…"
+                : `${seleccionados.length} vendedor${seleccionados.length === 1 ? "" : "es"} seleccionado${seleccionados.length === 1 ? "" : "s"}`}
+              <ChevronDown className="h-4 w-4 text-muted" strokeWidth={1.75} />
+            </button>
+            {menuAbierto && (
+              <>
+                <div className="fixed inset-0 z-10" onClick={() => setMenuAbierto(false)} />
+                <div className="absolute left-0 top-full z-20 mt-1 max-h-56 w-full overflow-y-auto rounded-xl border border-silver-deep/60 bg-surface p-2 shadow-lg">
+                  {vendedores.map((v) => (
+                    <label
+                      key={v.id}
+                      className="flex items-center gap-3 rounded-xl px-3 py-2 hover:bg-surface-2"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={v.id in cantidades}
+                        onChange={() => toggle(v.id)}
+                        className="h-4 w-4 accent-primary"
+                      />
+                      <span className="text-sm text-foreground">{v.nombre}</span>
+                      <span className="ml-auto text-[11px] uppercase tracking-wider text-muted">{v.rol}</span>
+                    </label>
+                  ))}
+                  {vendedores.length === 0 && (
+                    <p className="px-3 py-2 text-sm text-muted">No hay vendedores activos.</p>
+                  )}
+                </div>
+              </>
+            )}
           </div>
 
-          <label className="flex flex-col gap-2">
-            <span className="text-xs font-medium uppercase tracking-wider text-muted">
-              Leads por vendedor
-            </span>
-            <input
-              type="number"
-              min={1}
-              value={cantidad}
-              onChange={(e) => setCantidad(parseInt(e.target.value, 10) || 1)}
-              className="rounded-2xl border border-silver-deep/60 bg-surface-2 px-4 py-2.5 text-sm text-foreground outline-none"
-            />
-          </label>
+          {seleccionados.length > 0 && (
+            <div className="flex flex-col gap-2">
+              <p className="text-xs font-medium uppercase tracking-wider text-muted">Leads por vendedor</p>
+              <div className="flex max-h-48 flex-col gap-2 overflow-y-auto">
+                {seleccionados.map((v) => (
+                  <div key={v.id} className="flex items-center justify-between gap-3">
+                    <span className="truncate text-sm text-foreground">{v.nombre}</span>
+                    <input
+                      type="number"
+                      min={1}
+                      value={cantidades[v.id] || ""}
+                      onChange={(e) => setCantidad(v.id, parseInt(e.target.value, 10) || 1)}
+                      className="w-24 flex-none rounded-xl border border-silver-deep/60 bg-surface-2 px-3 py-2 text-sm text-foreground outline-none"
+                    />
+                  </div>
+                ))}
+              </div>
+              <p className="text-xs text-muted">
+                Total a asignar: {seleccionados.reduce((acc, v) => acc + (cantidades[v.id] || 0), 0)} leads
+              </p>
+            </div>
+          )}
 
           <button
             onClick={confirmar}
-            disabled={activos.size === 0 || enviando}
+            disabled={seleccionados.length === 0 || enviando}
             className="rounded-xl bg-primary py-2.5 text-sm font-medium text-white transition-all duration-500 ease-spring active:scale-[0.98] disabled:opacity-50"
           >
             {enviando ? "Asignando…" : "Confirmar asignación"}
