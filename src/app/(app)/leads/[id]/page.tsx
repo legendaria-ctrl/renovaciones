@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { obtenerLead, listarNotasLead, registrarAccionLead, actualizarLlamada, registrarAbono } from "@/lib/leadsService";
 import { crearSolicitud } from "@/lib/pendientesService";
+import { listarProductosActivos } from "@/lib/productosService";
 import { usePendientes } from "@/lib/pendientes-context";
 import { useSesion } from "@/lib/session-context";
 import { estadoDesdeVencimiento, aFecha } from "@/lib/membership";
@@ -31,7 +32,7 @@ import {
   Moneda,
   EstadoLlamada,
 } from "@/lib/constants";
-import { Lead, NotaLead } from "@/lib/types";
+import { Lead, NotaLead, Producto } from "@/lib/types";
 import { StatusBadge } from "@/components/StatusBadge";
 
 type Tab = "RESUMEN" | "SEGUIMIENTO" | "ACTIVIDAD";
@@ -67,6 +68,8 @@ export default function LeadDetallePage() {
   const [moneda, setMoneda] = useState<Moneda>(MONEDAS.MXN);
   const [comprobanteUrl, setComprobanteUrl] = useState("");
   const [enviando, setEnviando] = useState(false);
+  const [productos, setProductos] = useState<Producto[]>([]);
+  const [productoId, setProductoId] = useState("");
 
   const cargar = useCallback(async () => {
     setCargando(true);
@@ -85,6 +88,28 @@ export default function LeadDetallePage() {
   useEffect(() => {
     cargar();
   }, [cargar]);
+
+  useEffect(() => {
+    listarProductosActivos().then(setProductos);
+  }, []);
+
+  const productoSeleccionado = productos.find((p) => p.id === productoId) ?? null;
+
+  function abrirAccion(tipo: "PAGO" | "ABONO" | "NOTA") {
+    setAccionAbierta(tipo);
+    setMonto(0);
+    setProductoId("");
+    setComprobanteUrl("");
+    setTexto("");
+  }
+
+  function elegirProducto(pid: string) {
+    setProductoId(pid);
+    if (accionAbierta === "PAGO") {
+      const p = productos.find((x) => x.id === pid);
+      setMonto(p?.precioTotal ?? 0);
+    }
+  }
 
   async function registrarSimple(tipo: "NO_CONTACTAR") {
     if (!usuario || !lead) return;
@@ -126,7 +151,7 @@ export default function LeadDetallePage() {
 
   /** Pago/Renovación: requiere autorización del admin/coordinador antes de reflejarse. */
   async function enviarPago() {
-    if (!usuario || !lead || monto <= 0 || !comprobanteUrl.trim()) return;
+    if (!usuario || !lead || monto <= 0 || !comprobanteUrl.trim() || !productoSeleccionado) return;
     setEnviando(true);
     const tipoMembresiaKey = lead.liveMeses ? TIPOS_MEMBRESIA.LIVE : TIPOS_MEMBRESIA.SINERGETICO;
     await crearSolicitud({
@@ -141,11 +166,11 @@ export default function LeadDetallePage() {
       tipoMembresia: "Club Sinergético + Club Sinergético Live (1 año)",
       tipoMembresiaKey,
       liveMeses: lead.liveMeses,
+      productoId: productoSeleccionado.id,
+      productoNombre: productoSeleccionado.nombre,
+      productoComision: productoSeleccionado.comisionPorVenta,
       notas: texto.trim(),
     });
-    setMonto(0);
-    setComprobanteUrl("");
-    setTexto("");
     setAccionAbierta(null);
     setEnviando(false);
     refrescarPendientes();
@@ -154,7 +179,7 @@ export default function LeadDetallePage() {
 
   /** El abono no necesita autorización: se guarda directo y marca al lead como apartado. */
   async function enviarAbono() {
-    if (!usuario || !lead || monto <= 0 || !comprobanteUrl.trim()) return;
+    if (!usuario || !lead || monto <= 0 || !comprobanteUrl.trim() || !productoSeleccionado) return;
     setEnviando(true);
     await registrarAbono({
       leadId: lead.id,
@@ -164,10 +189,10 @@ export default function LeadDetallePage() {
       moneda,
       comprobanteUrl: comprobanteUrl.trim(),
       notas: texto.trim(),
+      productoId: productoSeleccionado.id,
+      productoNombre: productoSeleccionado.nombre,
+      productoPrecio: productoSeleccionado.precioTotal,
     });
-    setMonto(0);
-    setComprobanteUrl("");
-    setTexto("");
     setAccionAbierta(null);
     setEnviando(false);
     cargar();
@@ -191,6 +216,12 @@ export default function LeadDetallePage() {
   const estadoSinergetico = estadoDesdeVencimiento(vencSinergetico);
   const estadoLive = estadoDesdeVencimiento(vencLive);
   const inactivo = estadoSinergetico === "VENCIDO" || estadoLive === "VENCIDO";
+  const progresoAbono =
+    lead.apartado && lead.productoActualPrecio
+      ? Math.min(100, Math.round(((lead.totalAbonado ?? 0) / lead.productoActualPrecio) * 100))
+      : null;
+  const faltante =
+    lead.apartado && lead.productoActualPrecio ? Math.max(0, lead.productoActualPrecio - (lead.totalAbonado ?? 0)) : null;
 
   return (
     <div className="flex flex-col gap-5">
@@ -233,7 +264,7 @@ export default function LeadDetallePage() {
             <div className="flex flex-wrap items-center gap-2">
               {lead.apartado && (
                 <span className="rounded-full bg-warning/10 px-3 py-1 text-xs font-medium text-warning">
-                  Apartado{lead.totalAbonado ? ` · $${lead.totalAbonado.toLocaleString("es-MX")} abonado` : ""}
+                  Apartado{lead.productoActualNombre ? ` · ${lead.productoActualNombre}` : ""}
                 </span>
               )}
               {inactivo && (
@@ -289,9 +320,31 @@ export default function LeadDetallePage() {
                 </div>
               </div>
 
+              {progresoAbono !== null && (
+                <div className="rounded-2xl bg-warning/5 p-4">
+                  <div className="flex items-center justify-between text-xs font-medium uppercase tracking-wider text-muted">
+                    <span>Progreso del apartado · {lead.productoActualNombre}</span>
+                    <span>{progresoAbono}%</span>
+                  </div>
+                  <div className="mt-2 h-2 overflow-hidden rounded-full bg-surface-2">
+                    <div
+                      className="h-full rounded-full bg-warning transition-all duration-500"
+                      style={{ width: `${progresoAbono}%` }}
+                    />
+                  </div>
+                  <div className="mt-2 flex items-center justify-between text-sm">
+                    <span className="text-foreground">
+                      ${(lead.totalAbonado ?? 0).toLocaleString("es-MX")} de $
+                      {lead.productoActualPrecio?.toLocaleString("es-MX")}
+                    </span>
+                    <span className="font-medium text-warning">Faltan ${faltante?.toLocaleString("es-MX")}</span>
+                  </div>
+                </div>
+              )}
+
               <div className="flex flex-wrap gap-2">
                 <button
-                  onClick={() => setAccionAbierta("PAGO")}
+                  onClick={() => abrirAccion("PAGO")}
                   disabled={enviando}
                   className="flex items-center gap-2 rounded-xl bg-success/10 px-4 py-2.5 text-sm font-medium text-success transition-all duration-500 ease-spring active:scale-[0.98] disabled:opacity-50"
                 >
@@ -299,7 +352,7 @@ export default function LeadDetallePage() {
                   Pagó / Renovó
                 </button>
                 <button
-                  onClick={() => setAccionAbierta("ABONO")}
+                  onClick={() => abrirAccion("ABONO")}
                   disabled={enviando}
                   className="flex items-center gap-2 rounded-xl bg-warning/10 px-4 py-2.5 text-sm font-medium text-warning transition-all duration-500 ease-spring active:scale-[0.98] disabled:opacity-50"
                 >
@@ -307,7 +360,7 @@ export default function LeadDetallePage() {
                   Dio abono
                 </button>
                 <button
-                  onClick={() => setAccionAbierta("NOTA")}
+                  onClick={() => abrirAccion("NOTA")}
                   disabled={enviando}
                   className="flex items-center gap-2 rounded-xl bg-surface-2 px-4 py-2.5 text-sm font-medium text-muted transition-all duration-500 ease-spring hover:text-foreground active:scale-[0.98] disabled:opacity-50"
                 >
@@ -330,6 +383,33 @@ export default function LeadDetallePage() {
                 <div className="rounded-2xl bg-surface-2 p-4">
                   {(accionAbierta === "PAGO" || accionAbierta === "ABONO") && (
                     <div className="mb-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                      <label className="flex flex-col gap-2 sm:col-span-2">
+                        <span className="text-xs font-medium uppercase tracking-wider text-muted">Producto</span>
+                        <select
+                          value={productoId}
+                          onChange={(e) => elegirProducto(e.target.value)}
+                          className="rounded-xl border border-silver-deep/60 bg-surface px-4 py-2.5 text-sm outline-none"
+                        >
+                          <option value="">Selecciona un producto…</option>
+                          {productos.map((p) => (
+                            <option key={p.id} value={p.id}>
+                              {p.nombre} · ${p.precioTotal.toLocaleString("es-MX")}
+                            </option>
+                          ))}
+                        </select>
+                        {productos.length === 0 && (
+                          <span className="text-xs text-danger">
+                            No hay productos activos — pídele a un admin que cree uno en Comisiones.
+                          </span>
+                        )}
+                        {accionAbierta === "ABONO" && productoSeleccionado && (
+                          <span className="text-xs text-muted">
+                            {lead.productoActualId === productoSeleccionado.id
+                              ? `Ya lleva $${(lead.totalAbonado ?? 0).toLocaleString("es-MX")} de $${productoSeleccionado.precioTotal.toLocaleString("es-MX")}`
+                              : "Este abono empieza un progreso nuevo para este producto."}
+                          </span>
+                        )}
+                      </label>
                       <label className="flex flex-col gap-2">
                         <span className="text-xs font-medium uppercase tracking-wider text-muted">
                           Monto {accionAbierta === "PAGO" ? "pagado" : "del abono"}
@@ -337,9 +417,12 @@ export default function LeadDetallePage() {
                         <input
                           type="number"
                           min={1}
+                          readOnly={accionAbierta === "PAGO"}
                           value={monto || ""}
                           onChange={(e) => setMonto(parseFloat(e.target.value) || 0)}
-                          className="rounded-xl border border-silver-deep/60 bg-surface px-4 py-2.5 text-sm outline-none"
+                          className={`rounded-xl border border-silver-deep/60 px-4 py-2.5 text-sm outline-none ${
+                            accionAbierta === "PAGO" ? "bg-surface-2 text-muted" : "bg-surface"
+                          }`}
                         />
                       </label>
                       <label className="flex flex-col gap-2">
@@ -390,7 +473,7 @@ export default function LeadDetallePage() {
                       }}
                       disabled={
                         enviando ||
-                        (accionAbierta !== "NOTA" && (monto <= 0 || !comprobanteUrl.trim()))
+                        (accionAbierta !== "NOTA" && (monto <= 0 || !comprobanteUrl.trim() || !productoId))
                       }
                       className="rounded-xl bg-primary px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
                     >

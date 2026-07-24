@@ -27,11 +27,26 @@ export type LeadOverlay = {
   vencimientoSinergeticoOverride?: Timestamp | null;
   vencimientoLiveOverride?: Timestamp | null;
   // El abono no pasa por autorización: se guarda directo y marca al lead
-  // como apartado para que resalte arriba de la lista del vendedor.
+  // como apartado para que resalte arriba de la lista del vendedor. Se
+  // acumula hacia el producto que se esté abonando actualmente; si se
+  // abona hacia un producto distinto, el total arranca de nuevo.
   apartado?: boolean;
   totalAbonado?: number;
+  productoActualId?: string | null;
+  productoActualNombre?: string | null;
+  productoActualPrecio?: number | null;
   creadoEn?: Timestamp;
   actualizadoEn?: Timestamp;
+};
+
+/** Producto vendible: precio total y comisión fija que gana el vendedor por cada venta. */
+export type Producto = {
+  id: string;
+  nombre: string;
+  precioTotal: number;
+  comisionPorVenta: number;
+  activo: boolean;
+  creadoEn: Timestamp;
 };
 
 /** Lead combinado para la UI: datos del sheet + overlay de Firestore (si existe). */
@@ -74,6 +89,9 @@ export type SolicitudAbono = {
   tipoMembresia: string; // etiqueta para mostrar
   tipoMembresiaKey: TipoMembresia; // para recalcular el vencimiento al aprobar
   liveMeses: number | null;
+  productoId: string | null;
+  productoNombre: string | null;
+  productoComision: number | null; // snapshot al momento de la venta
   notas: string;
   estado: EstadoSolicitud;
   creadoEn: Timestamp;

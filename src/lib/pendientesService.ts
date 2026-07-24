@@ -13,7 +13,7 @@ import {
 import { db } from "./firebase";
 import { SolicitudAbono } from "./types";
 import { ESTADOS_SOLICITUD, ACCIONES_LEAD, TIPOS_SOLICITUD, TipoMembresia, Moneda } from "./constants";
-import { registrarAccionLead, aplicarRenovacionManual } from "./leadsService";
+import { registrarAccionLead, aplicarRenovacionManual, limpiarApartado } from "./leadsService";
 
 const PENDIENTES = "solicitudesAbono";
 
@@ -29,6 +29,9 @@ export async function crearSolicitud(datos: {
   tipoMembresia: string;
   tipoMembresiaKey: TipoMembresia;
   liveMeses: number | null;
+  productoId: string | null;
+  productoNombre: string | null;
+  productoComision: number | null;
   notas: string;
 }) {
   await addDoc(collection(db, PENDIENTES), {
@@ -57,6 +60,19 @@ export async function contarPendientes(): Promise<number> {
   return snap.data().count;
 }
 
+/** Ventas autorizadas (pagos aprobados) — la base del reporte de comisiones. */
+export async function listarVentasAprobadas(): Promise<SolicitudAbono[]> {
+  const snap = await getDocs(
+    query(
+      collection(db, PENDIENTES),
+      where("estado", "==", ESTADOS_SOLICITUD.APROBADO),
+      where("tipo", "==", TIPOS_SOLICITUD.PAGO),
+      orderBy("resueltoEn", "desc")
+    )
+  );
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as SolicitudAbono);
+}
+
 export async function resolverSolicitud(
   solicitud: SolicitudAbono,
   aprobar: boolean,
@@ -74,6 +90,8 @@ export async function resolverSolicitud(
 
   if (aprobar && esPago) {
     await aplicarRenovacionManual(solicitud.leadId);
+    // Ya se pagó completo: deja de estar "apartado" con progreso pendiente.
+    await limpiarApartado(solicitud.leadId);
   }
 
   await registrarAccionLead({

@@ -14,7 +14,13 @@ import { db } from "./firebase";
 import { Lead, NotaLead, SheetLead, LeadOverlay } from "./types";
 import { ACCIONES_LEAD, ACCION_LABEL, LLAMADA_LABEL, AccionLead, EstadoLlamada, Moneda } from "./constants";
 import { obtenerLeadsDelSheet } from "./sheetService";
-import { obtenerOverlays, obtenerOverlay, asegurarOverlay, limpiarCacheOverlays, OVERLAY_VACIO } from "./overlayService";
+import {
+  obtenerOverlays,
+  obtenerOverlay,
+  asegurarOverlay,
+  limpiarCacheOverlays,
+  OVERLAY_VACIO,
+} from "./overlayService";
 import { aFecha, vencimientoSinergetico, vencimientoLive } from "./membership";
 
 const NOTAS = "notas";
@@ -47,6 +53,9 @@ function combinarLead(s: SheetLead, o: LeadOverlay): Lead {
     llamada: o.llamada ?? null,
     apartado: o.apartado ?? false,
     totalAbonado: o.totalAbonado ?? 0,
+    productoActualId: o.productoActualId ?? null,
+    productoActualNombre: o.productoActualNombre ?? null,
+    productoActualPrecio: o.productoActualPrecio ?? null,
   };
 }
 
@@ -203,24 +212,35 @@ export async function registrarAbono(params: {
   moneda: Moneda;
   comprobanteUrl: string;
   notas?: string;
+  productoId: string;
+  productoNombre: string;
+  productoPrecio: number;
 }) {
   const ref = await asegurarOverlay(params.leadId);
+  const overlayActual = (await obtenerOverlay(params.leadId)) ?? OVERLAY_VACIO;
 
   await addDoc(collection(db, "leads", params.leadId, NOTAS), {
     leadId: params.leadId,
     autorId: params.autorId,
     autorNombre: params.autorNombre,
     tipo: ACCIONES_LEAD.ABONO,
-    texto: params.notas?.trim() || `${ACCION_LABEL.ABONO} de ${params.monto} ${params.moneda}`,
+    texto:
+      params.notas?.trim() ||
+      `${ACCION_LABEL.ABONO} de ${params.monto} ${params.moneda} (${params.productoNombre})`,
     monto: params.monto,
     moneda: params.moneda,
     comprobanteUrl: params.comprobanteUrl,
     creadoEn: Timestamp.now(),
   });
 
+  // Si es un producto distinto al que se venía abonando, el progreso arranca de nuevo.
+  const mismoProducto = overlayActual.productoActualId === params.productoId;
   await updateDoc(ref, {
     apartado: true,
-    totalAbonado: increment(params.monto),
+    totalAbonado: mismoProducto ? increment(params.monto) : params.monto,
+    productoActualId: params.productoId,
+    productoActualNombre: params.productoNombre,
+    productoActualPrecio: params.productoPrecio,
     actualizadoEn: Timestamp.now(),
   });
   limpiarCacheOverlays();
@@ -238,6 +258,19 @@ export async function aplicarRenovacionManual(leadId: string) {
   await updateDoc(ref, {
     vencimientoSinergeticoOverride: Timestamp.fromDate(vencimientoSinergetico(ahora)),
     vencimientoLiveOverride: Timestamp.fromDate(vencimientoLive(ahora, 12)),
+    actualizadoEn: Timestamp.now(),
+  });
+  limpiarCacheOverlays();
+}
+
+export async function limpiarApartado(leadId: string) {
+  const ref = await asegurarOverlay(leadId);
+  await updateDoc(ref, {
+    apartado: false,
+    totalAbonado: 0,
+    productoActualId: null,
+    productoActualNombre: null,
+    productoActualPrecio: null,
     actualizadoEn: Timestamp.now(),
   });
   limpiarCacheOverlays();

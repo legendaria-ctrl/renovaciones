@@ -50,6 +50,9 @@ const OVERLAY_VACIO: LeadOverlay = {
   vencimientoLiveOverride: null,
   apartado: false,
   totalAbonado: 0,
+  productoActualId: null,
+  productoActualNombre: null,
+  productoActualPrecio: null,
 };
 
 /** Crea el overlay la primera vez que alguien toca un lead; si ya existe, solo mergea. */
