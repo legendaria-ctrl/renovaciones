@@ -23,6 +23,7 @@ import {
   actualizarLlamada,
   registrarAbono,
   deshacerAbono,
+  restarAbono,
 } from "@/lib/leadsService";
 import { crearSolicitud } from "@/lib/pendientesService";
 import { listarProductosActivos } from "@/lib/productosService";
@@ -80,6 +81,10 @@ export default function LeadDetallePage() {
   const [deshaciendoId, setDeshaciendoId] = useState<string | null>(null);
   const [notaADeshacer, setNotaADeshacer] = useState<NotaLead | null>(null);
   const [motivoDeshacer, setMotivoDeshacer] = useState("");
+  const [ajusteAbierto, setAjusteAbierto] = useState(false);
+  const [montoAjuste, setMontoAjuste] = useState(0);
+  const [motivoAjuste, setMotivoAjuste] = useState("");
+  const [enviandoAjuste, setEnviandoAjuste] = useState(false);
   const [productos, setProductos] = useState<Producto[]>([]);
   const [productoId, setProductoId] = useState("");
 
@@ -265,6 +270,23 @@ export default function LeadDetallePage() {
     }
   }
 
+  async function confirmarAjuste() {
+    if (!usuario || !lead || montoAjuste <= 0 || !motivoAjuste.trim()) return;
+    setEnviandoAjuste(true);
+    setAccionError(null);
+    try {
+      await restarAbono(lead.id, montoAjuste, motivoAjuste.trim(), usuario.id, usuario.nombre);
+      setAjusteAbierto(false);
+      setMontoAjuste(0);
+      setMotivoAjuste("");
+      await cargar();
+    } catch (err) {
+      setAccionError(err instanceof Error ? err.message : "No se pudo aplicar el ajuste.");
+    } finally {
+      setEnviandoAjuste(false);
+    }
+  }
+
   if (cargando) return <p className="py-8 text-center text-sm text-muted">Cargando…</p>;
   if (error) {
     return (
@@ -406,6 +428,64 @@ export default function LeadDetallePage() {
                     </span>
                     <span className="font-medium text-warning">Faltan ${faltante?.toLocaleString("es-MX")}</span>
                   </div>
+
+                  {!ajusteAbierto ? (
+                    <button
+                      onClick={() => {
+                        setAjusteAbierto(true);
+                        setMontoAjuste(0);
+                        setMotivoAjuste("");
+                        setAccionError(null);
+                      }}
+                      className="mt-3 flex items-center gap-1.5 text-xs font-medium text-danger hover:underline"
+                    >
+                      <Undo2 className="h-3.5 w-3.5" strokeWidth={1.75} />
+                      Restar del abono
+                    </button>
+                  ) : (
+                    <div className="mt-3 flex flex-col gap-2 rounded-xl bg-surface-2 p-3">
+                      {accionError && <p className="text-xs text-danger">{accionError}</p>}
+                      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                        <label className="flex flex-col gap-1.5">
+                          <span className="text-xs font-medium uppercase tracking-wider text-muted">
+                            Cantidad a restar
+                          </span>
+                          <input
+                            type="number"
+                            min={1}
+                            max={lead.totalAbonado ?? undefined}
+                            value={montoAjuste || ""}
+                            onChange={(e) => setMontoAjuste(parseFloat(e.target.value) || 0)}
+                            className="rounded-xl border border-silver-deep/60 bg-surface px-3 py-2 text-sm outline-none"
+                          />
+                        </label>
+                        <label className="flex flex-col gap-1.5">
+                          <span className="text-xs font-medium uppercase tracking-wider text-muted">Motivo</span>
+                          <input
+                            value={motivoAjuste}
+                            onChange={(e) => setMotivoAjuste(e.target.value)}
+                            placeholder="Ej. Reembolso parcial"
+                            className="rounded-xl border border-silver-deep/60 bg-surface px-3 py-2 text-sm outline-none"
+                          />
+                        </label>
+                      </div>
+                      <div className="flex justify-end gap-2">
+                        <button
+                          onClick={() => setAjusteAbierto(false)}
+                          className="rounded-xl px-3 py-2 text-sm font-medium text-muted"
+                        >
+                          Cancelar
+                        </button>
+                        <button
+                          onClick={confirmarAjuste}
+                          disabled={montoAjuste <= 0 || !motivoAjuste.trim() || enviandoAjuste}
+                          className="rounded-xl bg-danger px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
+                        >
+                          {enviandoAjuste ? "Guardando…" : "Confirmar"}
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 

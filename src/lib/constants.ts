@@ -65,6 +65,7 @@ export const ACCIONES_LEAD = {
   IMPORTACION: "IMPORTACION",
   APROBACION: "APROBACION",
   RECHAZO: "RECHAZO",
+  AJUSTE: "AJUSTE",
 } as const;
 export type AccionLead = (typeof ACCIONES_LEAD)[keyof typeof ACCIONES_LEAD];
 
@@ -79,6 +80,7 @@ export const ACCION_LABEL: Record<AccionLead, string> = {
   IMPORTACION: "Importado del sheet",
   APROBACION: "Abono aprobado",
   RECHAZO: "Abono rechazado",
+  AJUSTE: "Ajuste de abono",
 };
 
 // Estado de seguimiento telefónico del lead, igual que el CRM hermano.

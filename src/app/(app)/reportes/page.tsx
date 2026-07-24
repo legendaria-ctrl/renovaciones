@@ -1,7 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { listarActividadRango, resumirPorVendedor, ResumenVendedor } from "@/lib/reportesService";
+import { listarActividadRango, listarTodaLaActividadRango, resumirPorVendedor, ResumenVendedor } from "@/lib/reportesService";
+import { ACCION_LABEL } from "@/lib/constants";
+import { NotaLead } from "@/lib/types";
+import { aFecha } from "@/lib/membership";
 
 function hoyISO() {
   return new Date().toISOString().slice(0, 10);
@@ -17,6 +20,7 @@ export default function ReportesPage() {
   const [desde, setDesde] = useState(haceUnMesISO());
   const [hasta, setHasta] = useState(hoyISO());
   const [resumen, setResumen] = useState<ResumenVendedor[] | null>(null);
+  const [actividad, setActividad] = useState<NotaLead[] | null>(null);
   const [cargando, setCargando] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -24,8 +28,14 @@ export default function ReportesPage() {
     setCargando(true);
     setError(null);
     try {
-      const actividad = await listarActividadRango(new Date(desde), new Date(`${hasta}T23:59:59`));
-      setResumen(resumirPorVendedor(actividad));
+      const desdeFecha = new Date(desde);
+      const hastaFecha = new Date(`${hasta}T23:59:59`);
+      const [renovaciones, todaLaActividad] = await Promise.all([
+        listarActividadRango(desdeFecha, hastaFecha),
+        listarTodaLaActividadRango(desdeFecha, hastaFecha),
+      ]);
+      setResumen(resumirPorVendedor(renovaciones));
+      setActividad(todaLaActividad);
     } catch (err) {
       setError(err instanceof Error ? err.message : "No se pudo cargar el reporte.");
     } finally {
@@ -70,23 +80,61 @@ export default function ReportesPage() {
           {error && <p className="text-sm text-danger">{error}</p>}
 
           {resumen && (
-            <div className="flex flex-col divide-y divide-silver/60">
-              {resumen.length === 0 ? (
-                <p className="py-6 text-center text-sm text-muted">Sin actividad en este rango.</p>
-              ) : (
-                resumen.map((r) => (
-                  <div key={r.autorId} className="flex items-center justify-between py-3">
-                    <span className="text-sm font-medium text-foreground">{r.autorNombre}</span>
-                    <span className="text-sm text-muted">
-                      {r.cantidad} renovaciones · ${r.totalMonto.toLocaleString("es-MX")}
-                    </span>
-                  </div>
-                ))
-              )}
+            <div>
+              <h2 className="mb-2 text-sm font-semibold text-foreground">Renovaciones por vendedor</h2>
+              <div className="flex flex-col divide-y divide-silver/60">
+                {resumen.length === 0 ? (
+                  <p className="py-6 text-center text-sm text-muted">Sin renovaciones en este rango.</p>
+                ) : (
+                  resumen.map((r) => (
+                    <div key={r.autorId} className="flex items-center justify-between py-3">
+                      <span className="text-sm font-medium text-foreground">{r.autorNombre}</span>
+                      <span className="text-sm text-muted">
+                        {r.cantidad} renovaciones · ${r.totalMonto.toLocaleString("es-MX")}
+                      </span>
+                    </div>
+                  ))
+                )}
+              </div>
             </div>
           )}
         </div>
       </div>
+
+      {actividad && (
+        <div className="shell rounded-[1.75rem] p-2 diffused">
+          <div className="core flex flex-col gap-1 rounded-[calc(1.75rem-0.5rem)] p-4">
+            <h2 className="px-2 pb-2 text-sm font-semibold text-foreground">
+              Actividad detallada ({actividad.length})
+            </h2>
+            {actividad.length === 0 ? (
+              <p className="py-6 text-center text-sm text-muted">Sin actividad en este rango.</p>
+            ) : (
+              <div className="flex max-h-[32rem] flex-col divide-y divide-silver/60 overflow-y-auto">
+                {actividad.map((n) => (
+                  <div key={n.id} className="flex flex-wrap items-center justify-between gap-2 py-3">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium text-foreground">{ACCION_LABEL[n.tipo]}</span>
+                        {n.deshecho && (
+                          <span className="rounded-full bg-danger/10 px-2 py-0.5 text-[11px] font-medium text-danger">
+                            Deshecho
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-muted">
+                        {n.texto} {n.monto ? `· $${n.monto.toLocaleString("es-MX")} ${n.moneda ?? ""}` : ""}
+                      </p>
+                      <p className="text-xs text-muted">por {n.autorNombre}</p>
+                    </div>
+                    <span className="text-xs text-muted">{aFecha(n.creadoEn)?.toLocaleString("es-MX")}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

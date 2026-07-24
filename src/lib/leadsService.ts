@@ -330,6 +330,49 @@ export async function deshacerAbono(
   limpiarCacheOverlays();
 }
 
+/**
+ * Ajuste manual: resta una cantidad cualquiera del progreso del apartado
+ * (por ejemplo cuando un abono viejo no se pudo descontar solo al deshacerse
+ * porque no tenía guardado a qué producto pertenecía). Pide motivo siempre y
+ * queda registrado en Actividad.
+ */
+export async function restarAbono(
+  leadId: string,
+  monto: number,
+  motivo: string,
+  autorId: string,
+  autorNombre: string
+) {
+  const ref = await asegurarOverlay(leadId);
+  const overlayActual = (await obtenerOverlay(leadId)) ?? OVERLAY_VACIO;
+  const nuevoTotal = (overlayActual.totalAbonado ?? 0) - monto;
+
+  if (nuevoTotal <= 0) {
+    await updateDoc(ref, {
+      apartado: false,
+      totalAbonado: 0,
+      productoActualId: null,
+      productoActualNombre: null,
+      productoActualPrecio: null,
+      actualizadoEn: Timestamp.now(),
+    });
+  } else {
+    await updateDoc(ref, { totalAbonado: nuevoTotal, actualizadoEn: Timestamp.now() });
+  }
+
+  await addDoc(collection(db, "leads", leadId, NOTAS), {
+    leadId,
+    autorId,
+    autorNombre,
+    tipo: ACCIONES_LEAD.AJUSTE,
+    texto: `Se restaron ${monto} del abono acumulado: ${motivo.trim()}`,
+    monto,
+    creadoEn: Timestamp.now(),
+  });
+
+  limpiarCacheOverlays();
+}
+
 export async function limpiarApartado(leadId: string) {
   const ref = await asegurarOverlay(leadId);
   await updateDoc(ref, {
