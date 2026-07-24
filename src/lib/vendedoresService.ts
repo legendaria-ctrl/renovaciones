@@ -123,6 +123,18 @@ export async function listarVendedoresActivos(): Promise<Usuario[]> {
   return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Usuario);
 }
 
+/** Igual que listarVendedoresActivos pero incluye Admins (para reportes de comisiones, por si venden). */
+export async function listarVendedoresYAdminsActivos(): Promise<Usuario[]> {
+  const snap = await getDocs(
+    query(
+      usuariosRef,
+      where("rol", "in", [ROLES.VENDEDOR, ROLES.COORDINADOR, ROLES.ADMIN]),
+      where("estado", "==", ESTADOS_SOLICITUD.APROBADO)
+    )
+  );
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Usuario);
+}
+
 export async function decidirSolicitud(id: string, estado: "APROBADO" | "RECHAZADO", decididoPor: string) {
   await updateDoc(doc(db, USUARIOS, id), { estado, decididoPor, decididoEn: serverTimestamp() });
 }

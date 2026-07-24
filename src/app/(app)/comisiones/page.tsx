@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { Plus, Pencil, X, Check, ChevronDown } from "lucide-react";
 import { listarProductos, crearProducto, actualizarProducto } from "@/lib/productosService";
 import { listarVentasAprobadas } from "@/lib/pendientesService";
-import { listarVendedoresActivos } from "@/lib/vendedoresService";
+import { listarVendedoresYAdminsActivos } from "@/lib/vendedoresService";
 import { aFecha } from "@/lib/membership";
 import { MONEDAS, Moneda } from "@/lib/constants";
 import { Producto, SolicitudAbono, Usuario } from "@/lib/types";
@@ -69,7 +69,11 @@ export default function ComisionesPage() {
     setCargando(true);
     setError(null);
     try {
-      const [p, v, u] = await Promise.all([listarProductos(true), listarVentasAprobadas(), listarVendedoresActivos()]);
+      const [p, v, u] = await Promise.all([
+        listarProductos(true),
+        listarVentasAprobadas(),
+        listarVendedoresYAdminsActivos(),
+      ]);
       setProductos(p);
       setVentas(v);
       setVendedores(u);
