@@ -68,7 +68,7 @@ function combinarConOverlay(sheetLeads: SheetLead[], overlays: Map<string, LeadO
  * Firestore (cacheado). Sin queries de Firestore por página: todo el costo
  * ya se pagó al cargar ambas cachés una vez.
  */
-export async function listarLeads(filtros: FiltrosLeads) {
+async function filtrarYOrdenarLeads(filtros: FiltrosLeads): Promise<Lead[]> {
   const [sheetLeads, overlays] = await Promise.all([obtenerLeadsDelSheet(), obtenerOverlays()]);
   let leads: Lead[] = combinarConOverlay(sheetLeads, overlays);
 
@@ -123,11 +123,40 @@ export async function listarLeads(filtros: FiltrosLeads) {
     return va - vb;
   });
 
+  return leads;
+}
+
+export async function listarLeads(filtros: FiltrosLeads) {
+  const leads = await filtrarYOrdenarLeads(filtros);
+
   const pagina = filtros.pagina ?? 0;
   const inicio = pagina * PAGE_SIZE;
   const pageItems = leads.slice(inicio, inicio + PAGE_SIZE);
 
   return { leads: pageItems, hayMas: leads.length > inicio + PAGE_SIZE, total: leads.length };
+}
+
+/**
+ * Para el flujo de asignación automática: elige hasta `cantidad` leads que
+ * cumplan los filtros (por default vencidos, opcionalmente en un rango de
+ * fecha de vencimiento y/o solo los que no tienen vendedor), ya ordenados
+ * (los más atrasados primero) — sin paginar.
+ */
+export async function seleccionarLeadsParaAsignar(params: {
+  membresia: FiltroMembresia;
+  cantidad: number;
+  vencidoDesde?: Date | null;
+  vencidoHasta?: Date | null;
+  soloSinAsignar?: boolean;
+}): Promise<Lead[]> {
+  const leads = await filtrarYOrdenarLeads({
+    membresia: params.membresia,
+    estado: "VENCIDO",
+    vencidoDesde: params.vencidoDesde,
+    vencidoHasta: params.vencidoHasta,
+    soloSinAsignar: params.soloSinAsignar,
+  });
+  return leads.slice(0, params.cantidad);
 }
 
 /** Búsqueda por correo, teléfono (últimos dígitos) o nombre — todo en memoria. */

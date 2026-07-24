@@ -30,6 +30,7 @@ import { crearSolicitud } from "@/lib/pendientesService";
 import { listarProductosActivos } from "@/lib/productosService";
 import { usePendientes } from "@/lib/pendientes-context";
 import { useSesion } from "@/lib/session-context";
+import { listarUsuarios } from "@/lib/vendedoresService";
 import { estadoDesdeVencimiento, aFecha } from "@/lib/membership";
 import {
   ACCIONES_LEAD,
@@ -82,6 +83,7 @@ export default function LeadDetallePage() {
   const [deshaciendoId, setDeshaciendoId] = useState<string | null>(null);
   const [notaADeshacer, setNotaADeshacer] = useState<NotaLead | null>(null);
   const [motivoDeshacer, setMotivoDeshacer] = useState("");
+  const [nombresPorId, setNombresPorId] = useState<Record<string, string>>({});
   const [ajusteAbierto, setAjusteAbierto] = useState(false);
   const [montoAjuste, setMontoAjuste] = useState(0);
   const [motivoAjuste, setMotivoAjuste] = useState("");
@@ -109,6 +111,14 @@ export default function LeadDetallePage() {
 
   useEffect(() => {
     listarProductosActivos().then(setProductos);
+  }, []);
+
+  useEffect(() => {
+    listarUsuarios().then((todos) => {
+      const mapa: Record<string, string> = {};
+      for (const u of todos) mapa[u.id] = u.nombre;
+      setNombresPorId(mapa);
+    });
   }, []);
 
   const productoSeleccionado = productos.find((p) => p.id === productoId) ?? null;
@@ -349,6 +359,12 @@ export default function LeadDetallePage() {
                       <MapPin className="h-3.5 w-3.5" strokeWidth={1.75} /> {lead.ciudad}
                     </span>
                   )}
+                  <span className="flex items-center gap-1.5">
+                    <User className="h-3.5 w-3.5" strokeWidth={1.75} />
+                    {lead.vendedorId
+                      ? `Asignado a ${nombresPorId[lead.vendedorId] ?? "vendedor eliminado"}`
+                      : "Sin asignar"}
+                  </span>
                 </div>
               </div>
             </div>

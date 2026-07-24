@@ -12,13 +12,14 @@ import {
   FiltroMembresia,
   FiltroEstado,
 } from "@/lib/leadsService";
-import { listarVendedoresActivos } from "@/lib/vendedoresService";
+import { listarVendedoresActivos, listarUsuarios } from "@/lib/vendedoresService";
 import { estadoDesdeVencimiento, aFecha, textoVencimiento } from "@/lib/membership";
 import { limpiarCacheSheet } from "@/lib/sheetService";
 import { limpiarCacheOverlays } from "@/lib/overlayService";
 import { Lead, Usuario } from "@/lib/types";
 import { StatusBadge } from "@/components/StatusBadge";
 import { AsignarLeadsModal } from "@/components/AsignarLeadsModal";
+import { SeleccionarLeadsModal } from "@/components/SeleccionarLeadsModal";
 
 const TABS: { valor: FiltroMembresia; label: string }[] = [
   { valor: "TODOS", label: "Todos" },
@@ -38,7 +39,10 @@ export default function LeadsPage() {
   const [seleccionActiva, setSeleccionActiva] = useState(false);
   const [seleccionados, setSeleccionados] = useState<Set<string>>(new Set());
   const [modalAbierto, setModalAbierto] = useState(false);
+  const [modalRangoAbierto, setModalRangoAbierto] = useState(false);
+  const [leadIdsParaAsignar, setLeadIdsParaAsignar] = useState<string[]>([]);
   const [vendedores, setVendedores] = useState<Usuario[]>([]);
+  const [nombresPorId, setNombresPorId] = useState<Record<string, string>>({});
   const [pagina, setPagina] = useState(0);
   const [hayMas, setHayMas] = useState(false);
   const [total, setTotal] = useState(0);
@@ -83,6 +87,11 @@ export default function LeadsPage() {
   useEffect(() => {
     if (puedeAsignar(usuario?.rol)) {
       listarVendedoresActivos().then(setVendedores);
+      listarUsuarios().then((todos) => {
+        const mapa: Record<string, string> = {};
+        for (const u of todos) mapa[u.id] = u.nombre;
+        setNombresPorId(mapa);
+      });
     }
   }, [usuario]);
 
@@ -96,11 +105,19 @@ export default function LeadsPage() {
   }
 
   async function confirmarAsignacion(asignaciones: { vendedorId: string; cantidad: number }[]) {
-    await asignarLeadsEnLote(Array.from(seleccionados), asignaciones);
+    const ids = leadIdsParaAsignar.length > 0 ? leadIdsParaAsignar : Array.from(seleccionados);
+    await asignarLeadsEnLote(ids, asignaciones);
     setModalAbierto(false);
     setSeleccionActiva(false);
     setSeleccionados(new Set());
+    setLeadIdsParaAsignar([]);
     cargar();
+  }
+
+  function leadsEncontrados(leads: Lead[]) {
+    setLeadIdsParaAsignar(leads.map((l) => l.id));
+    setModalRangoAbierto(false);
+    setModalAbierto(true);
   }
 
   const campoVencimiento = membresia === "LIVE" ? "live" : "sinergetico";
@@ -117,17 +134,25 @@ export default function LeadsPage() {
           >
             <RefreshCw className="h-4 w-4" strokeWidth={1.75} />
           </button>
+          {puedeAsignar(usuario?.rol) && !seleccionActiva && (
+            <button
+              onClick={() => setModalRangoAbierto(true)}
+              className="flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-medium text-white shadow-[0_10px_24px_-8px_rgba(10,92,255,0.5)] transition-all duration-500 ease-spring active:scale-[0.98]"
+            >
+              <UserPlus className="h-4 w-4" strokeWidth={1.75} />
+              Asignar leads
+            </button>
+          )}
           {puedeAsignar(usuario?.rol) && (
             <button
               onClick={() => setSeleccionActiva((v) => !v)}
               className={`flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium transition-all duration-500 ease-spring active:scale-[0.98] ${
                 seleccionActiva
                   ? "bg-surface-2 text-muted"
-                  : "bg-primary text-white shadow-[0_10px_24px_-8px_rgba(10,92,255,0.5)]"
+                  : "border border-silver-deep/60 bg-surface-2 text-foreground"
               }`}
             >
-              <UserPlus className="h-4 w-4" strokeWidth={1.75} />
-              {seleccionActiva ? "Cancelar selección" : "Asignar leads"}
+              {seleccionActiva ? "Cancelar selección" : "Selección manual"}
             </button>
           )}
         </div>
@@ -229,6 +254,13 @@ export default function LeadsPage() {
                           {lead.correo ?? lead.telefono ?? "sin contacto"}
                         </p>
                         <p className="truncate text-xs text-muted">{textoVencimiento(venc)}</p>
+                        {puedeAsignar(usuario?.rol) && (
+                          <p className="truncate text-xs text-muted">
+                            {lead.vendedorId
+                              ? `Asignado a ${nombresPorId[lead.vendedorId] ?? "vendedor eliminado"}`
+                              : "Sin asignar"}
+                          </p>
+                        )}
                       </div>
                       <div className="flex flex-none items-center gap-2">
                         <StatusBadge estado={est} />
@@ -267,10 +299,21 @@ export default function LeadsPage() {
         </div>
       </div>
 
+      {modalRangoAbierto && (
+        <SeleccionarLeadsModal
+          membresia={membresia}
+          onCancelar={() => setModalRangoAbierto(false)}
+          onListo={leadsEncontrados}
+        />
+      )}
+
       {modalAbierto && (
         <AsignarLeadsModal
           vendedores={vendedores}
-          onCancelar={() => setModalAbierto(false)}
+          onCancelar={() => {
+            setModalAbierto(false);
+            setLeadIdsParaAsignar([]);
+          }}
           onConfirmar={confirmarAsignacion}
         />
       )}
