@@ -68,6 +68,7 @@ export default function LeadDetallePage() {
   const [moneda, setMoneda] = useState<Moneda>(MONEDAS.MXN);
   const [comprobanteUrl, setComprobanteUrl] = useState("");
   const [enviando, setEnviando] = useState(false);
+  const [accionError, setAccionError] = useState<string | null>(null);
   const [productos, setProductos] = useState<Producto[]>([]);
   const [productoId, setProductoId] = useState("");
 
@@ -97,6 +98,7 @@ export default function LeadDetallePage() {
 
   function abrirAccion(tipo: "PAGO" | "ABONO" | "NOTA") {
     setAccionAbierta(tipo);
+    setAccionError(null);
     setMonto(0);
     setProductoId("");
     setComprobanteUrl("");
@@ -115,89 +117,120 @@ export default function LeadDetallePage() {
   async function registrarSimple(tipo: "NO_CONTACTAR") {
     if (!usuario || !lead) return;
     setEnviando(true);
-    await registrarAccionLead({
-      leadId: lead.id,
-      autorId: usuario.id,
-      autorNombre: usuario.nombre,
-      tipo: ACCIONES_LEAD[tipo],
-      texto: ACCION_LABEL[ACCIONES_LEAD[tipo]],
-    });
-    setEnviando(false);
-    cargar();
+    setAccionError(null);
+    try {
+      await registrarAccionLead({
+        leadId: lead.id,
+        autorId: usuario.id,
+        autorNombre: usuario.nombre,
+        tipo: ACCIONES_LEAD[tipo],
+        texto: ACCION_LABEL[ACCIONES_LEAD[tipo]],
+      });
+      await cargar();
+    } catch (err) {
+      setAccionError(err instanceof Error ? err.message : "No se pudo guardar.");
+    } finally {
+      setEnviando(false);
+    }
   }
 
   async function marcarLlamada(estado: EstadoLlamada) {
     if (!usuario || !lead) return;
     setEnviando(true);
-    await actualizarLlamada(lead.id, estado, usuario.id, usuario.nombre);
-    setEnviando(false);
-    cargar();
+    setAccionError(null);
+    try {
+      await actualizarLlamada(lead.id, estado, usuario.id, usuario.nombre);
+      await cargar();
+    } catch (err) {
+      setAccionError(err instanceof Error ? err.message : "No se pudo guardar.");
+    } finally {
+      setEnviando(false);
+    }
   }
 
   async function enviarNota() {
     if (!usuario || !lead || !texto.trim()) return;
     setEnviando(true);
-    await registrarAccionLead({
-      leadId: lead.id,
-      autorId: usuario.id,
-      autorNombre: usuario.nombre,
-      tipo: ACCIONES_LEAD.NOTA,
-      texto: texto.trim(),
-    });
-    setTexto("");
-    setAccionAbierta(null);
-    setEnviando(false);
-    cargar();
+    setAccionError(null);
+    try {
+      await registrarAccionLead({
+        leadId: lead.id,
+        autorId: usuario.id,
+        autorNombre: usuario.nombre,
+        tipo: ACCIONES_LEAD.NOTA,
+        texto: texto.trim(),
+      });
+      setTexto("");
+      setAccionAbierta(null);
+      await cargar();
+    } catch (err) {
+      setAccionError(err instanceof Error ? err.message : "No se pudo guardar la nota.");
+    } finally {
+      setEnviando(false);
+    }
   }
 
   /** Pago/Renovación: requiere autorización del admin/coordinador antes de reflejarse. */
   async function enviarPago() {
     if (!usuario || !lead || monto <= 0 || !comprobanteUrl.trim() || !productoSeleccionado) return;
     setEnviando(true);
-    const tipoMembresiaKey = lead.liveMeses ? TIPOS_MEMBRESIA.LIVE : TIPOS_MEMBRESIA.SINERGETICO;
-    await crearSolicitud({
-      leadId: lead.id,
-      leadNombre: lead.nombre,
-      vendedorId: usuario.id,
-      vendedorNombre: usuario.nombre,
-      tipo: "PAGO",
-      monto,
-      moneda,
-      comprobanteUrl: comprobanteUrl.trim(),
-      tipoMembresia: "Club Sinergético + Club Sinergético Live (1 año)",
-      tipoMembresiaKey,
-      liveMeses: lead.liveMeses,
-      productoId: productoSeleccionado.id,
-      productoNombre: productoSeleccionado.nombre,
-      productoComision: productoSeleccionado.comisionPorVenta,
-      productoMoneda: productoSeleccionado.moneda,
-      notas: texto.trim(),
-    });
-    setAccionAbierta(null);
-    setEnviando(false);
-    refrescarPendientes();
-    cargar();
+    setAccionError(null);
+    try {
+      const tipoMembresiaKey = lead.liveMeses ? TIPOS_MEMBRESIA.LIVE : TIPOS_MEMBRESIA.SINERGETICO;
+      await crearSolicitud({
+        leadId: lead.id,
+        leadNombre: lead.nombre,
+        vendedorId: usuario.id,
+        vendedorNombre: usuario.nombre,
+        tipo: "PAGO",
+        monto,
+        moneda,
+        comprobanteUrl: comprobanteUrl.trim(),
+        tipoMembresia: "Club Sinergético + Club Sinergético Live (1 año)",
+        tipoMembresiaKey,
+        liveMeses: lead.liveMeses,
+        productoId: productoSeleccionado.id,
+        productoNombre: productoSeleccionado.nombre,
+        productoComision: productoSeleccionado.comisionPorVenta,
+        productoMoneda: productoSeleccionado.moneda,
+        productoComisionMoneda: productoSeleccionado.comisionMoneda,
+        notas: texto.trim(),
+      });
+      setAccionAbierta(null);
+      refrescarPendientes();
+      await cargar();
+    } catch (err) {
+      setAccionError(err instanceof Error ? err.message : "No se pudo enviar el pago a autorización.");
+    } finally {
+      setEnviando(false);
+    }
   }
 
   /** El abono no necesita autorización: se guarda directo y marca al lead como apartado. */
   async function enviarAbono() {
     if (!usuario || !lead || monto <= 0 || !comprobanteUrl.trim() || !productoSeleccionado) return;
     setEnviando(true);
-    await registrarAbono({
-      leadId: lead.id,
-      autorId: usuario.id,
-      autorNombre: usuario.nombre,
-      monto,
-      moneda,
-      comprobanteUrl: comprobanteUrl.trim(),
-      notas: texto.trim(),
-      productoId: productoSeleccionado.id,
-      productoNombre: productoSeleccionado.nombre,
-      productoPrecio: productoSeleccionado.precioTotal,
-    });
-    setAccionAbierta(null);
-    setEnviando(false);
-    cargar();
+    setAccionError(null);
+    try {
+      await registrarAbono({
+        leadId: lead.id,
+        autorId: usuario.id,
+        autorNombre: usuario.nombre,
+        monto,
+        moneda,
+        comprobanteUrl: comprobanteUrl.trim(),
+        notas: texto.trim(),
+        productoId: productoSeleccionado.id,
+        productoNombre: productoSeleccionado.nombre,
+        productoPrecio: productoSeleccionado.precioTotal,
+      });
+      setAccionAbierta(null);
+      await cargar();
+    } catch (err) {
+      setAccionError(err instanceof Error ? err.message : "No se pudo guardar el abono.");
+    } finally {
+      setEnviando(false);
+    }
   }
 
   if (cargando) return <p className="py-8 text-center text-sm text-muted">Cargando…</p>;
@@ -383,6 +416,9 @@ export default function LeadDetallePage() {
 
               {accionAbierta && (
                 <div className="rounded-2xl bg-surface-2 p-4">
+                  {accionError && (
+                    <div className="mb-3 rounded-xl bg-danger/10 px-3 py-2 text-sm text-danger">{accionError}</div>
+                  )}
                   {(accionAbierta === "PAGO" || accionAbierta === "ABONO") && (
                     <div className="mb-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
                       <label className="flex flex-col gap-2 sm:col-span-2">
@@ -396,6 +432,9 @@ export default function LeadDetallePage() {
                           {productos.map((p) => (
                             <option key={p.id} value={p.id}>
                               {p.nombre} · ${p.precioTotal.toLocaleString("es-MX")} {p.moneda}
+                              {p.comisionMoneda !== p.moneda
+                                ? ` (comisión en ${p.comisionMoneda})`
+                                : ""}
                             </option>
                           ))}
                         </select>

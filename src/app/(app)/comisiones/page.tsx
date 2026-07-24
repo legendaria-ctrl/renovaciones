@@ -19,7 +19,7 @@ type ResumenVendedor = {
 function resumirPorVendedor(ventas: SolicitudAbono[]): ResumenVendedor[] {
   const mapa = new Map<string, ResumenVendedor>();
   for (const v of ventas) {
-    const moneda = v.productoMoneda ?? MONEDAS.MXN;
+    const moneda = v.productoComisionMoneda ?? v.productoMoneda ?? MONEDAS.MXN;
     const clave = `${v.vendedorId}_${moneda}`;
     const actual = mapa.get(clave) ?? {
       vendedorId: v.vendedorId,
@@ -45,6 +45,7 @@ export default function ComisionesPage() {
   const [precioTotal, setPrecioTotal] = useState(0);
   const [moneda, setMoneda] = useState<Moneda>(MONEDAS.MXN);
   const [comisionPorVenta, setComisionPorVenta] = useState(0);
+  const [comisionMoneda, setComisionMoneda] = useState<Moneda>(MONEDAS.MXN);
   const [guardando, setGuardando] = useState(false);
 
   const [editandoId, setEditandoId] = useState<string | null>(null);
@@ -52,6 +53,7 @@ export default function ComisionesPage() {
   const [editPrecio, setEditPrecio] = useState(0);
   const [editMoneda, setEditMoneda] = useState<Moneda>(MONEDAS.MXN);
   const [editComision, setEditComision] = useState(0);
+  const [editComisionMoneda, setEditComisionMoneda] = useState<Moneda>(MONEDAS.MXN);
   const [guardandoEdit, setGuardandoEdit] = useState(false);
 
   const cargar = useCallback(async () => {
@@ -76,11 +78,12 @@ export default function ComisionesPage() {
     e.preventDefault();
     if (!nombre.trim() || precioTotal <= 0) return;
     setGuardando(true);
-    await crearProducto({ nombre: nombre.trim(), precioTotal, moneda, comisionPorVenta });
+    await crearProducto({ nombre: nombre.trim(), precioTotal, moneda, comisionPorVenta, comisionMoneda });
     setNombre("");
     setPrecioTotal(0);
     setMoneda(MONEDAS.MXN);
     setComisionPorVenta(0);
+    setComisionMoneda(MONEDAS.MXN);
     setFormAbierto(false);
     setGuardando(false);
     cargar();
@@ -97,6 +100,7 @@ export default function ComisionesPage() {
     setEditPrecio(p.precioTotal);
     setEditMoneda(p.moneda);
     setEditComision(p.comisionPorVenta);
+    setEditComisionMoneda(p.comisionMoneda);
   }
 
   async function guardarEdicion(id: string) {
@@ -107,6 +111,7 @@ export default function ComisionesPage() {
       precioTotal: editPrecio,
       moneda: editMoneda,
       comisionPorVenta: editComision,
+      comisionMoneda: editComisionMoneda,
     });
     setEditandoId(null);
     setGuardandoEdit(false);
@@ -174,6 +179,17 @@ export default function ComisionesPage() {
                 className="rounded-xl border border-silver-deep/60 bg-surface-2 px-4 py-2.5 text-sm outline-none"
               />
             </label>
+            <label className="flex flex-col gap-1.5">
+              <span className="text-xs font-medium uppercase tracking-wider text-muted">Moneda de la comisión</span>
+              <select
+                value={comisionMoneda}
+                onChange={(e) => setComisionMoneda(e.target.value as Moneda)}
+                className="rounded-xl border border-silver-deep/60 bg-surface-2 px-4 py-2.5 text-sm outline-none"
+              >
+                <option value={MONEDAS.MXN}>MXN</option>
+                <option value={MONEDAS.USD}>USD</option>
+              </select>
+            </label>
             <button
               type="submit"
               disabled={guardando}
@@ -205,11 +221,11 @@ export default function ComisionesPage() {
             <div className="flex flex-col divide-y divide-silver/60">
               {productos.map((p) =>
                 editandoId === p.id ? (
-                  <div key={p.id} className="grid grid-cols-1 gap-3 py-3 sm:grid-cols-4">
+                  <div key={p.id} className="grid grid-cols-2 gap-3 py-3 sm:grid-cols-5">
                     <input
                       value={editNombre}
                       onChange={(e) => setEditNombre(e.target.value)}
-                      className="rounded-xl border border-silver-deep/60 bg-surface-2 px-3 py-2 text-sm outline-none sm:col-span-4"
+                      className="col-span-2 rounded-xl border border-silver-deep/60 bg-surface-2 px-3 py-2 text-sm outline-none sm:col-span-5"
                       placeholder="Nombre del producto"
                     />
                     <input
@@ -236,7 +252,16 @@ export default function ComisionesPage() {
                       className="rounded-xl border border-silver-deep/60 bg-surface-2 px-3 py-2 text-sm outline-none"
                       placeholder="Comisión por venta"
                     />
-                    <div className="flex gap-2">
+                    <select
+                      value={editComisionMoneda}
+                      onChange={(e) => setEditComisionMoneda(e.target.value as Moneda)}
+                      className="rounded-xl border border-silver-deep/60 bg-surface-2 px-3 py-2 text-sm outline-none"
+                      title="Moneda de la comisión"
+                    >
+                      <option value={MONEDAS.MXN}>Comisión MXN</option>
+                      <option value={MONEDAS.USD}>Comisión USD</option>
+                    </select>
+                    <div className="col-span-2 flex gap-2 sm:col-span-1">
                       <button
                         onClick={() => guardarEdicion(p.id)}
                         disabled={guardandoEdit}
@@ -259,7 +284,7 @@ export default function ComisionesPage() {
                       <p className="text-sm font-medium text-foreground">{p.nombre}</p>
                       <p className="text-xs text-muted">
                         Precio ${p.precioTotal.toLocaleString("es-MX")} {p.moneda} · Comisión $
-                        {p.comisionPorVenta.toLocaleString("es-MX")} {p.moneda}
+                        {p.comisionPorVenta.toLocaleString("es-MX")} {p.comisionMoneda}
                       </p>
                     </div>
                     <div className="flex items-center gap-2">
@@ -334,7 +359,8 @@ export default function ComisionesPage() {
                     </p>
                   </div>
                   <span className="text-sm text-success">
-                    Comisión ${v.productoComision?.toLocaleString("es-MX") ?? 0} {v.productoMoneda ?? ""}
+                    Comisión ${v.productoComision?.toLocaleString("es-MX") ?? 0}{" "}
+                    {v.productoComisionMoneda ?? v.productoMoneda ?? ""}
                   </span>
                 </div>
               ))}

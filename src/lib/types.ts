@@ -46,6 +46,7 @@ export type Producto = {
   precioTotal: number;
   moneda: Moneda;
   comisionPorVenta: number;
+  comisionMoneda: Moneda; // puede ser distinta a la del precio (ej. precio en MXN, comisión en USD)
   activo: boolean;
   creadoEn: Timestamp;
 };
@@ -93,7 +94,8 @@ export type SolicitudAbono = {
   productoId: string | null;
   productoNombre: string | null;
   productoComision: number | null; // snapshot al momento de la venta
-  productoMoneda: Moneda | null;
+  productoMoneda: Moneda | null; // moneda del precio
+  productoComisionMoneda: Moneda | null; // moneda de la comisión (puede ser distinta)
   notas: string;
   estado: EstadoSolicitud;
   creadoEn: Timestamp;

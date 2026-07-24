@@ -23,6 +23,7 @@ export async function crearProducto(datos: {
   precioTotal: number;
   moneda: Moneda;
   comisionPorVenta: number;
+  comisionMoneda: Moneda;
 }) {
   await addDoc(collection(db, PRODUCTOS), { ...datos, activo: true, creadoEn: Timestamp.now() });
   cache = null;
@@ -30,7 +31,9 @@ export async function crearProducto(datos: {
 
 export async function actualizarProducto(
   id: string,
-  datos: Partial<Pick<Producto, "nombre" | "precioTotal" | "moneda" | "comisionPorVenta" | "activo">>
+  datos: Partial<
+    Pick<Producto, "nombre" | "precioTotal" | "moneda" | "comisionPorVenta" | "comisionMoneda" | "activo">
+  >
 ) {
   await updateDoc(doc(db, PRODUCTOS, id), datos);
   cache = null;

@@ -33,6 +33,7 @@ export async function crearSolicitud(datos: {
   productoNombre: string | null;
   productoComision: number | null;
   productoMoneda: Moneda | null;
+  productoComisionMoneda: Moneda | null;
   notas: string;
 }) {
   await addDoc(collection(db, PENDIENTES), {
