@@ -56,6 +56,9 @@ export default function ComisionesPage() {
   const [editComisionMoneda, setEditComisionMoneda] = useState<Moneda>(MONEDAS.MXN);
   const [guardandoEdit, setGuardandoEdit] = useState(false);
 
+  const [desde, setDesde] = useState("");
+  const [hasta, setHasta] = useState("");
+
   const cargar = useCallback(async () => {
     setCargando(true);
     setError(null);
@@ -118,7 +121,15 @@ export default function ComisionesPage() {
     cargar();
   }
 
-  const resumen = resumirPorVendedor(ventas);
+  const ventasFiltradas = ventas.filter((v) => {
+    const fecha = aFecha(v.resueltoEn);
+    if (!fecha) return false;
+    if (desde && fecha < new Date(`${desde}T00:00:00`)) return false;
+    if (hasta && fecha > new Date(`${hasta}T23:59:59`)) return false;
+    return true;
+  });
+
+  const resumen = resumirPorVendedor(ventasFiltradas);
   const totalesPorMoneda = resumen.reduce<Record<string, number>>((acc, r) => {
     acc[r.moneda] = (acc[r.moneda] ?? 0) + r.totalComision;
     return acc;
@@ -322,10 +333,43 @@ export default function ComisionesPage() {
                 .join(" · ") || "Total comisiones: $0"}
             </span>
           </div>
+          <div className="flex flex-wrap items-center gap-2 px-2 pb-2">
+            <label className="flex items-center gap-1.5 text-xs text-muted">
+              Desde
+              <input
+                type="date"
+                value={desde}
+                onChange={(e) => setDesde(e.target.value)}
+                className="rounded-lg border border-silver-deep/60 bg-surface-2 px-2 py-1.5 text-sm outline-none"
+              />
+            </label>
+            <label className="flex items-center gap-1.5 text-xs text-muted">
+              Hasta
+              <input
+                type="date"
+                value={hasta}
+                onChange={(e) => setHasta(e.target.value)}
+                className="rounded-lg border border-silver-deep/60 bg-surface-2 px-2 py-1.5 text-sm outline-none"
+              />
+            </label>
+            {(desde || hasta) && (
+              <button
+                onClick={() => {
+                  setDesde("");
+                  setHasta("");
+                }}
+                className="text-xs font-medium text-primary underline"
+              >
+                Quitar filtro
+              </button>
+            )}
+          </div>
           {cargando ? (
             <p className="py-8 text-center text-sm text-muted">Cargando…</p>
           ) : resumen.length === 0 ? (
-            <p className="py-8 text-center text-sm text-muted">Aún no hay ventas autorizadas.</p>
+            <p className="py-8 text-center text-sm text-muted">
+              {desde || hasta ? "Sin ventas en ese rango." : "Aún no hay ventas autorizadas."}
+            </p>
           ) : (
             <div className="flex flex-col divide-y divide-silver/60">
               {resumen.map((r) => (
@@ -345,11 +389,13 @@ export default function ComisionesPage() {
       <div className="shell rounded-[1.75rem] p-2 diffused">
         <div className="core flex flex-col gap-1 rounded-[calc(1.75rem-0.5rem)] p-4">
           <h2 className="px-2 pb-2 text-sm font-semibold text-foreground">Últimas ventas autorizadas</h2>
-          {ventas.length === 0 ? (
-            <p className="py-8 text-center text-sm text-muted">Sin ventas todavía.</p>
+          {ventasFiltradas.length === 0 ? (
+            <p className="py-8 text-center text-sm text-muted">
+              {desde || hasta ? "Sin ventas en ese rango." : "Sin ventas todavía."}
+            </p>
           ) : (
             <div className="flex flex-col divide-y divide-silver/60">
-              {ventas.slice(0, 30).map((v) => (
+              {ventasFiltradas.slice(0, 30).map((v) => (
                 <div key={v.id} className="flex flex-wrap items-center justify-between gap-2 py-3">
                   <div>
                     <p className="text-sm font-medium text-foreground">{v.leadNombre}</p>
