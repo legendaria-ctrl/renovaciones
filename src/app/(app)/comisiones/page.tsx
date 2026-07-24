@@ -61,6 +61,9 @@ export default function ComisionesPage() {
 
   const [desde, setDesde] = useState("");
   const [hasta, setHasta] = useState("");
+  const [busqueda, setBusqueda] = useState("");
+  const [vendedoresElegidos, setVendedoresElegidos] = useState<string[]>([]);
+  const [menuVendedoresAbierto, setMenuVendedoresAbierto] = useState(false);
 
   const cargar = useCallback(async () => {
     setCargando(true);
@@ -125,15 +128,25 @@ export default function ComisionesPage() {
     cargar();
   }
 
+  const terminoBusqueda = busqueda.trim().toLowerCase();
   const ventasFiltradas = ventas.filter((v) => {
     const fecha = aFecha(v.resueltoEn);
     if (!fecha) return false;
     if (desde && fecha < new Date(`${desde}T00:00:00`)) return false;
     if (hasta && fecha > new Date(`${hasta}T23:59:59`)) return false;
+    if (vendedoresElegidos.length > 0 && !vendedoresElegidos.includes(v.vendedorId)) return false;
+    if (
+      terminoBusqueda &&
+      !v.leadNombre.toLowerCase().includes(terminoBusqueda) &&
+      !v.leadId.toLowerCase().includes(terminoBusqueda)
+    )
+      return false;
     return true;
   });
 
-  const resumen = resumirPorVendedor(ventasFiltradas, vendedores);
+  const vendedoresParaResumen =
+    vendedoresElegidos.length > 0 ? vendedores.filter((u) => vendedoresElegidos.includes(u.id)) : vendedores;
+  const resumen = resumirPorVendedor(ventasFiltradas, vendedoresParaResumen);
   const totalesPorMoneda = resumen.reduce<Record<string, number>>((acc, r) => {
     for (const [m, total] of Object.entries(r.totalesPorMoneda)) {
       acc[m] = (acc[m] ?? 0) + total;
@@ -358,15 +371,70 @@ export default function ComisionesPage() {
                 className="rounded-lg border border-silver-deep/60 bg-surface-2 px-2 py-1.5 text-sm outline-none"
               />
             </label>
-            {(desde || hasta) && (
+
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setMenuVendedoresAbierto((v) => !v)}
+                className="flex items-center gap-1.5 rounded-lg border border-silver-deep/60 bg-surface-2 px-3 py-1.5 text-xs text-foreground"
+              >
+                {vendedoresElegidos.length === 0
+                  ? "Todos los vendedores"
+                  : `${vendedoresElegidos.length} vendedor${vendedoresElegidos.length === 1 ? "" : "es"}`}
+                <ChevronDown className="h-3.5 w-3.5 text-muted" strokeWidth={1.75} />
+              </button>
+              {menuVendedoresAbierto && (
+                <>
+                  <div className="fixed inset-0 z-10" onClick={() => setMenuVendedoresAbierto(false)} />
+                  <div className="absolute left-0 top-full z-20 mt-1 max-h-64 w-56 overflow-y-auto rounded-xl border border-silver-deep/60 bg-surface p-2 shadow-lg">
+                    {vendedoresElegidos.length > 0 && (
+                      <button
+                        onClick={() => setVendedoresElegidos([])}
+                        className="mb-1 w-full rounded-lg px-2 py-1.5 text-left text-xs font-medium text-primary hover:bg-surface-2"
+                      >
+                        Limpiar selección
+                      </button>
+                    )}
+                    {vendedores.map((u) => (
+                      <label
+                        key={u.id}
+                        className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-foreground hover:bg-surface-2"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={vendedoresElegidos.includes(u.id)}
+                          onChange={(e) =>
+                            setVendedoresElegidos((prev) =>
+                              e.target.checked ? [...prev, u.id] : prev.filter((id) => id !== u.id)
+                            )
+                          }
+                        />
+                        {u.nombre}
+                      </label>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+
+            <input
+              value={busqueda}
+              onChange={(e) => setBusqueda(e.target.value)}
+              placeholder="Buscar lead por nombre, correo o teléfono"
+              className="min-w-[220px] flex-1 rounded-lg border border-silver-deep/60 bg-surface-2 px-3 py-1.5 text-xs outline-none"
+            />
+
+            {(desde || hasta || busqueda || vendedoresElegidos.length > 0) && (
               <button
                 onClick={() => {
                   setDesde("");
                   setHasta("");
+                  setBusqueda("");
+                  setVendedoresElegidos([]);
                 }}
                 className="text-xs font-medium text-primary underline"
               >
-                Quitar filtro
+                Quitar filtros
               </button>
             )}
           </div>
