@@ -66,6 +66,11 @@ export type NotaLead = {
   comprobanteUrl?: string;
   productoId?: string;
   productoNombre?: string;
+  deshecho?: boolean;
+  deshechoPorId?: string;
+  deshechoPorNombre?: string;
+  deshechoMotivo?: string;
+  deshechoEn?: Timestamp;
   creadoEn: Timestamp;
 };
 

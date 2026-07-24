@@ -1,4 +1,4 @@
-import { collectionGroup, query, where, orderBy, getDocs, Timestamp } from "firebase/firestore";
+import { collectionGroup, query, where, getDocs, Timestamp } from "firebase/firestore";
 import { db } from "./firebase";
 import { NotaLead } from "./types";
 import { ACCIONES_LEAD } from "./constants";
@@ -6,21 +6,22 @@ import { ACCIONES_LEAD } from "./constants";
 /**
  * Actividad de renovación (pagos y abonos aprobados) de todos los vendedores
  * en un rango de fechas, vía collectionGroup sobre las notas de cada lead.
- * Solo se filtra por fecha en la consulta (rango sobre un único campo, no
- * necesita índice compuesto); el tipo se filtra en memoria.
+ * Sin orderBy: en una collectionGroup query, ordenar requiere un índice de
+ * grupo de colección explícito (COLLECTION_GROUP_DESC) que no existe en este
+ * proyecto; se ordena en memoria en su lugar.
  */
 export async function listarActividadRango(desde: Date, hasta: Date): Promise<NotaLead[]> {
   const snap = await getDocs(
     query(
       collectionGroup(db, "notas"),
       where("creadoEn", ">=", Timestamp.fromDate(desde)),
-      where("creadoEn", "<=", Timestamp.fromDate(hasta)),
-      orderBy("creadoEn", "desc")
+      where("creadoEn", "<=", Timestamp.fromDate(hasta))
     )
   );
   return snap.docs
     .map((d) => ({ id: d.id, ...d.data() }) as NotaLead)
-    .filter((n) => n.tipo === ACCIONES_LEAD.PAGO || n.tipo === ACCIONES_LEAD.APROBACION);
+    .filter((n) => n.tipo === ACCIONES_LEAD.PAGO || n.tipo === ACCIONES_LEAD.APROBACION)
+    .sort((a, b) => (b.creadoEn?.toMillis() ?? 0) - (a.creadoEn?.toMillis() ?? 0));
 }
 
 export type ResumenVendedor = {

@@ -78,6 +78,8 @@ export default function LeadDetallePage() {
   const [enviando, setEnviando] = useState(false);
   const [accionError, setAccionError] = useState<string | null>(null);
   const [deshaciendoId, setDeshaciendoId] = useState<string | null>(null);
+  const [notaADeshacer, setNotaADeshacer] = useState<NotaLead | null>(null);
+  const [motivoDeshacer, setMotivoDeshacer] = useState("");
   const [productos, setProductos] = useState<Producto[]>([]);
   const [productoId, setProductoId] = useState("");
 
@@ -242,13 +244,19 @@ export default function LeadDetallePage() {
     }
   }
 
-  async function deshacer(nota: NotaLead) {
-    if (!usuario || !lead) return;
-    if (!confirm(`¿Deshacer este abono de ${nota.monto} ${nota.moneda}? Se resta del progreso del lead.`)) return;
-    setDeshaciendoId(nota.id);
+  function abrirDeshacer(nota: NotaLead) {
+    setNotaADeshacer(nota);
+    setMotivoDeshacer("");
+    setAccionError(null);
+  }
+
+  async function confirmarDeshacer() {
+    if (!usuario || !lead || !notaADeshacer || !motivoDeshacer.trim()) return;
+    setDeshaciendoId(notaADeshacer.id);
     setAccionError(null);
     try {
-      await deshacerAbono(lead.id, nota, usuario.id, usuario.nombre);
+      await deshacerAbono(lead.id, notaADeshacer, motivoDeshacer.trim(), usuario.id, usuario.nombre);
+      setNotaADeshacer(null);
       await cargar();
     } catch (err) {
       setAccionError(err instanceof Error ? err.message : "No se pudo deshacer el abono.");
@@ -606,7 +614,9 @@ export default function LeadDetallePage() {
                         <span className="text-sm font-medium text-foreground">{ACCION_LABEL[n.tipo]}</span>
                         <span className="text-xs text-muted">{aFecha(n.creadoEn)?.toLocaleString("es-MX")}</span>
                       </div>
-                      <p className="mt-1 text-sm text-muted">{n.texto}</p>
+                      <p className={`mt-1 text-sm ${n.deshecho ? "text-muted line-through" : "text-muted"}`}>
+                        {n.texto}
+                      </p>
                       {n.comprobanteUrl && (
                         <a
                           href={n.comprobanteUrl}
@@ -617,19 +627,53 @@ export default function LeadDetallePage() {
                           Ver comprobante
                         </a>
                       )}
+                      {n.deshecho && (
+                        <p className="mt-1 text-xs text-danger">
+                          Deshecho por {n.deshechoPorNombre} · {n.deshechoMotivo}
+                        </p>
+                      )}
                       <div className="mt-1 flex items-center justify-between">
                         <p className="text-xs text-muted">por {n.autorNombre}</p>
-                        {n.tipo === ACCIONES_LEAD.ABONO && (
+                        {n.tipo === ACCIONES_LEAD.ABONO && !n.deshecho && (
                           <button
-                            onClick={() => deshacer(n)}
+                            onClick={() => abrirDeshacer(n)}
                             disabled={deshaciendoId === n.id}
                             className="flex items-center gap-1 text-xs font-medium text-danger hover:underline disabled:opacity-50"
                           >
                             <Undo2 className="h-3.5 w-3.5" strokeWidth={1.75} />
-                            {deshaciendoId === n.id ? "Deshaciendo…" : "Deshacer"}
+                            Deshacer
                           </button>
                         )}
                       </div>
+                      {notaADeshacer?.id === n.id && (
+                        <div className="mt-2 flex flex-col gap-2 rounded-xl bg-surface-2 p-3">
+                          <span className="text-xs font-medium uppercase tracking-wider text-muted">
+                            Motivo para deshacer este abono
+                          </span>
+                          <textarea
+                            value={motivoDeshacer}
+                            onChange={(e) => setMotivoDeshacer(e.target.value)}
+                            rows={2}
+                            placeholder="Ej. Se reembolsó, se capturó por error…"
+                            className="rounded-xl border border-silver-deep/60 bg-surface px-3 py-2 text-sm outline-none"
+                          />
+                          <div className="flex justify-end gap-2">
+                            <button
+                              onClick={() => setNotaADeshacer(null)}
+                              className="rounded-xl px-3 py-2 text-sm font-medium text-muted"
+                            >
+                              Cancelar
+                            </button>
+                            <button
+                              onClick={confirmarDeshacer}
+                              disabled={!motivoDeshacer.trim() || deshaciendoId === n.id}
+                              className="rounded-xl bg-danger px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
+                            >
+                              {deshaciendoId === n.id ? "Deshaciendo…" : "Confirmar"}
+                            </button>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>

@@ -6,7 +6,6 @@ import {
   getDocs,
   updateDoc,
   addDoc,
-  deleteDoc,
   increment,
   Timestamp,
   writeBatch,
@@ -278,16 +277,29 @@ export async function aplicarRenovacionManual(leadId: string) {
 }
 
 /**
- * Deshace un abono ya guardado (reembolso o error de captura): borra la
- * nota y le resta el monto al progreso. Solo tiene sentido para el abono
- * del producto actual del lead — si ese abono era de un producto distinto
- * al que se está siguiendo ahora, no toca el progreso, solo borra la nota.
+ * Deshace un abono ya guardado (reembolso o error de captura): NO borra la
+ * nota original (queda marcada como deshecha, con quién y por qué, para que
+ * el registro se conserve) y le resta el monto al progreso. Solo tiene
+ * sentido tocar el progreso si ese abono era del producto actual del lead —
+ * si ya se venía siguiendo otro producto, solo se marca la nota.
  */
-export async function deshacerAbono(leadId: string, nota: NotaLead, autorId: string, autorNombre: string) {
+export async function deshacerAbono(
+  leadId: string,
+  nota: NotaLead,
+  motivo: string,
+  autorId: string,
+  autorNombre: string
+) {
   const ref = await asegurarOverlay(leadId);
   const overlayActual = (await obtenerOverlay(leadId)) ?? OVERLAY_VACIO;
 
-  await deleteDoc(doc(db, "leads", leadId, NOTAS, nota.id));
+  await updateDoc(doc(db, "leads", leadId, NOTAS, nota.id), {
+    deshecho: true,
+    deshechoPorId: autorId,
+    deshechoPorNombre: autorNombre,
+    deshechoMotivo: motivo.trim(),
+    deshechoEn: Timestamp.now(),
+  });
 
   const mismoProducto = overlayActual.productoActualId === nota.productoId;
   if (mismoProducto) {
@@ -311,7 +323,7 @@ export async function deshacerAbono(leadId: string, nota: NotaLead, autorId: str
     autorId,
     autorNombre,
     tipo: ACCIONES_LEAD.NOTA,
-    texto: `Abono de ${nota.monto} ${nota.moneda} deshecho (${nota.productoNombre ?? "producto eliminado"})`,
+    texto: `Abono de ${nota.monto} ${nota.moneda} deshecho (${nota.productoNombre ?? "producto eliminado"}): ${motivo.trim()}`,
     creadoEn: Timestamp.now(),
   });
 
