@@ -64,6 +64,8 @@ export type NotaLead = {
   monto?: number;
   moneda?: Moneda;
   comprobanteUrl?: string;
+  productoId?: string;
+  productoNombre?: string;
   creadoEn: Timestamp;
 };
 

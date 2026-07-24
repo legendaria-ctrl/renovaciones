@@ -14,8 +14,16 @@ import {
   User,
   PhoneCall,
   Activity,
+  Undo2,
 } from "lucide-react";
-import { obtenerLead, listarNotasLead, registrarAccionLead, actualizarLlamada, registrarAbono } from "@/lib/leadsService";
+import {
+  obtenerLead,
+  listarNotasLead,
+  registrarAccionLead,
+  actualizarLlamada,
+  registrarAbono,
+  deshacerAbono,
+} from "@/lib/leadsService";
 import { crearSolicitud } from "@/lib/pendientesService";
 import { listarProductosActivos } from "@/lib/productosService";
 import { usePendientes } from "@/lib/pendientes-context";
@@ -69,6 +77,7 @@ export default function LeadDetallePage() {
   const [comprobanteUrl, setComprobanteUrl] = useState("");
   const [enviando, setEnviando] = useState(false);
   const [accionError, setAccionError] = useState<string | null>(null);
+  const [deshaciendoId, setDeshaciendoId] = useState<string | null>(null);
   const [productos, setProductos] = useState<Producto[]>([]);
   const [productoId, setProductoId] = useState("");
 
@@ -230,6 +239,21 @@ export default function LeadDetallePage() {
       setAccionError(err instanceof Error ? err.message : "No se pudo guardar el abono.");
     } finally {
       setEnviando(false);
+    }
+  }
+
+  async function deshacer(nota: NotaLead) {
+    if (!usuario || !lead) return;
+    if (!confirm(`¿Deshacer este abono de ${nota.monto} ${nota.moneda}? Se resta del progreso del lead.`)) return;
+    setDeshaciendoId(nota.id);
+    setAccionError(null);
+    try {
+      await deshacerAbono(lead.id, nota, usuario.id, usuario.nombre);
+      await cargar();
+    } catch (err) {
+      setAccionError(err instanceof Error ? err.message : "No se pudo deshacer el abono.");
+    } finally {
+      setDeshaciendoId(null);
     }
   }
 
@@ -569,6 +593,9 @@ export default function LeadDetallePage() {
 
           {tab === "ACTIVIDAD" && (
             <div className="flex flex-col gap-3">
+              {accionError && (
+                <div className="rounded-xl bg-danger/10 px-3 py-2 text-sm text-danger">{accionError}</div>
+              )}
               {notas.length === 0 ? (
                 <p className="py-4 text-center text-sm text-muted">Sin actividad registrada.</p>
               ) : (
@@ -590,7 +617,19 @@ export default function LeadDetallePage() {
                           Ver comprobante
                         </a>
                       )}
-                      <p className="mt-1 text-xs text-muted">por {n.autorNombre}</p>
+                      <div className="mt-1 flex items-center justify-between">
+                        <p className="text-xs text-muted">por {n.autorNombre}</p>
+                        {n.tipo === ACCIONES_LEAD.ABONO && (
+                          <button
+                            onClick={() => deshacer(n)}
+                            disabled={deshaciendoId === n.id}
+                            className="flex items-center gap-1 text-xs font-medium text-danger hover:underline disabled:opacity-50"
+                          >
+                            <Undo2 className="h-3.5 w-3.5" strokeWidth={1.75} />
+                            {deshaciendoId === n.id ? "Deshaciendo…" : "Deshacer"}
+                          </button>
+                        )}
+                      </div>
                     </div>
                   ))}
                 </div>

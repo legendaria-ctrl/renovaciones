@@ -6,6 +6,7 @@ import {
   getDocs,
   updateDoc,
   addDoc,
+  deleteDoc,
   increment,
   Timestamp,
   writeBatch,
@@ -241,6 +242,8 @@ export async function registrarAbono(params: {
     monto: params.monto,
     moneda: params.moneda,
     comprobanteUrl: params.comprobanteUrl,
+    productoId: params.productoId,
+    productoNombre: params.productoNombre,
     creadoEn: Timestamp.now(),
   });
 
@@ -271,6 +274,47 @@ export async function aplicarRenovacionManual(leadId: string) {
     vencimientoLiveOverride: Timestamp.fromDate(vencimientoLive(ahora, 12)),
     actualizadoEn: Timestamp.now(),
   });
+  limpiarCacheOverlays();
+}
+
+/**
+ * Deshace un abono ya guardado (reembolso o error de captura): borra la
+ * nota y le resta el monto al progreso. Solo tiene sentido para el abono
+ * del producto actual del lead — si ese abono era de un producto distinto
+ * al que se está siguiendo ahora, no toca el progreso, solo borra la nota.
+ */
+export async function deshacerAbono(leadId: string, nota: NotaLead, autorId: string, autorNombre: string) {
+  const ref = await asegurarOverlay(leadId);
+  const overlayActual = (await obtenerOverlay(leadId)) ?? OVERLAY_VACIO;
+
+  await deleteDoc(doc(db, "leads", leadId, NOTAS, nota.id));
+
+  const mismoProducto = overlayActual.productoActualId === nota.productoId;
+  if (mismoProducto) {
+    const nuevoTotal = (overlayActual.totalAbonado ?? 0) - (nota.monto ?? 0);
+    if (nuevoTotal <= 0) {
+      await updateDoc(ref, {
+        apartado: false,
+        totalAbonado: 0,
+        productoActualId: null,
+        productoActualNombre: null,
+        productoActualPrecio: null,
+        actualizadoEn: Timestamp.now(),
+      });
+    } else {
+      await updateDoc(ref, { totalAbonado: increment(-(nota.monto ?? 0)), actualizadoEn: Timestamp.now() });
+    }
+  }
+
+  await addDoc(collection(db, "leads", leadId, NOTAS), {
+    leadId,
+    autorId,
+    autorNombre,
+    tipo: ACCIONES_LEAD.NOTA,
+    texto: `Abono de ${nota.monto} ${nota.moneda} deshecho (${nota.productoNombre ?? "producto eliminado"})`,
+    creadoEn: Timestamp.now(),
+  });
+
   limpiarCacheOverlays();
 }
 
