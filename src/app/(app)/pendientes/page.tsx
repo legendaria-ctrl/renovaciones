@@ -14,12 +14,19 @@ export default function PendientesPage() {
   const { refrescar } = usePendientes();
   const [solicitudes, setSolicitudes] = useState<SolicitudAbono[]>([]);
   const [cargando, setCargando] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [procesando, setProcesando] = useState<string | null>(null);
 
   const cargar = useCallback(async () => {
     setCargando(true);
-    setSolicitudes(await listarPendientes());
-    setCargando(false);
+    setError(null);
+    try {
+      setSolicitudes(await listarPendientes());
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No se pudo cargar la información.");
+    } finally {
+      setCargando(false);
+    }
   }, []);
 
   useEffect(() => {
@@ -38,6 +45,15 @@ export default function PendientesPage() {
   return (
     <div className="flex flex-col gap-5">
       <h1 className="text-xl font-semibold tracking-tight text-foreground">Pendientes de autorización</h1>
+
+      {error && (
+        <div className="flex items-center justify-between rounded-2xl bg-danger/10 px-4 py-3 text-sm text-danger">
+          <span>{error}</span>
+          <button onClick={cargar} className="font-medium underline">
+            Reintentar
+          </button>
+        </div>
+      )}
 
       <div className="shell rounded-[1.75rem] p-2 diffused">
         <div className="core flex flex-col divide-y divide-silver/60 rounded-[calc(1.75rem-0.5rem)] p-4">

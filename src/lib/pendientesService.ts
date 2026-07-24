@@ -2,7 +2,6 @@ import {
   collection,
   query,
   where,
-  orderBy,
   getDocs,
   getCountFromServer,
   doc,
@@ -43,15 +42,15 @@ export async function crearSolicitud(datos: {
   });
 }
 
+/**
+ * Un solo "where" (sin combinar con orderBy en otro campo) para no depender
+ * de un índice compuesto en Firestore; el orden se hace en memoria.
+ */
 export async function listarPendientes(): Promise<SolicitudAbono[]> {
-  const snap = await getDocs(
-    query(
-      collection(db, PENDIENTES),
-      where("estado", "==", ESTADOS_SOLICITUD.PENDIENTE),
-      orderBy("creadoEn", "asc")
-    )
-  );
-  return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as SolicitudAbono);
+  const snap = await getDocs(query(collection(db, PENDIENTES), where("estado", "==", ESTADOS_SOLICITUD.PENDIENTE)));
+  return snap.docs
+    .map((d) => ({ id: d.id, ...d.data() }) as SolicitudAbono)
+    .sort((a, b) => (a.creadoEn?.toMillis() ?? 0) - (b.creadoEn?.toMillis() ?? 0));
 }
 
 /** Solo para la burbuja del sidebar: cuenta sin traer los documentos completos. */
