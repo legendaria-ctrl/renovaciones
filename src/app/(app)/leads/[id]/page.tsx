@@ -311,6 +311,7 @@ export default function LeadDetallePage() {
       : null;
   const faltante =
     lead.apartado && lead.productoActualPrecio ? Math.max(0, lead.productoActualPrecio - (lead.totalAbonado ?? 0)) : null;
+  const notasDelLead = notas.filter((n) => n.tipo === ACCIONES_LEAD.NOTA);
 
   return (
     <div className="flex flex-col gap-5">
@@ -636,6 +637,24 @@ export default function LeadDetallePage() {
                         ? "Enviar a autorización"
                         : "Guardar abono"}
                     </button>
+                  </div>
+                </div>
+              )}
+
+              {notasDelLead.length > 0 && (
+                <div className="rounded-2xl bg-surface-2 p-4">
+                  <h3 className="mb-2 text-xs font-medium uppercase tracking-wider text-muted">Notas</h3>
+                  <div className="flex flex-col divide-y divide-silver/60">
+                    {notasDelLead.map((n) => (
+                      <div key={n.id} className="py-2.5">
+                        <p className={`text-sm ${n.deshecho ? "text-muted line-through" : "text-foreground"}`}>
+                          {n.texto}
+                        </p>
+                        <p className="mt-0.5 text-xs text-muted">
+                          {n.autorNombre} · {aFecha(n.creadoEn)?.toLocaleString("es-MX")}
+                        </p>
+                      </div>
+                    ))}
                   </div>
                 </div>
               )}
