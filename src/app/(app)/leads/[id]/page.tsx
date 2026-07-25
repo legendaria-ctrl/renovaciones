@@ -27,12 +27,13 @@ import {
   deshacerAbono,
   restarAbono,
   quitarNoContactar,
+  reasignarLead,
 } from "@/lib/leadsService";
 import { crearSolicitud } from "@/lib/pendientesService";
 import { listarProductosActivos } from "@/lib/productosService";
 import { usePendientes } from "@/lib/pendientes-context";
 import { useSesion } from "@/lib/session-context";
-import { listarUsuarios } from "@/lib/vendedoresService";
+import { listarUsuarios, listarVendedoresActivos } from "@/lib/vendedoresService";
 import { estadoDesdeVencimiento, aFecha } from "@/lib/membership";
 import {
   ACCIONES_LEAD,
@@ -44,8 +45,9 @@ import {
   MONEDAS,
   Moneda,
   EstadoLlamada,
+  puedeAsignar,
 } from "@/lib/constants";
-import { Lead, NotaLead, Producto } from "@/lib/types";
+import { Lead, NotaLead, Producto, Usuario } from "@/lib/types";
 import { StatusBadge } from "@/components/StatusBadge";
 
 type Tab = "RESUMEN" | "SEGUIMIENTO" | "ACTIVIDAD";
@@ -86,6 +88,8 @@ export default function LeadDetallePage() {
   const [notaADeshacer, setNotaADeshacer] = useState<NotaLead | null>(null);
   const [motivoDeshacer, setMotivoDeshacer] = useState("");
   const [nombresPorId, setNombresPorId] = useState<Record<string, string>>({});
+  const [vendedoresActivos, setVendedoresActivos] = useState<Usuario[]>([]);
+  const [reasignando, setReasignando] = useState(false);
   const [ajusteAbierto, setAjusteAbierto] = useState(false);
   const [montoAjuste, setMontoAjuste] = useState(0);
   const [motivoAjuste, setMotivoAjuste] = useState("");
@@ -123,6 +127,12 @@ export default function LeadDetallePage() {
       setNombresPorId(mapa);
     });
   }, []);
+
+  useEffect(() => {
+    if (puedeAsignar(usuario?.rol)) {
+      listarVendedoresActivos().then(setVendedoresActivos);
+    }
+  }, [usuario]);
 
   const productoSeleccionado = productos.find((p) => p.id === productoId) ?? null;
 
@@ -284,6 +294,20 @@ export default function LeadDetallePage() {
     }
   }
 
+  async function cambiarVendedor(vendedorId: string) {
+    if (!lead) return;
+    setReasignando(true);
+    setAccionError(null);
+    try {
+      await reasignarLead(lead.id, vendedorId || null);
+      await cargar();
+    } catch (err) {
+      setAccionError(err instanceof Error ? err.message : "No se pudo reasignar el lead.");
+    } finally {
+      setReasignando(false);
+    }
+  }
+
   async function quitarEtiquetaNoContactar() {
     if (!usuario || !lead) return;
     setQuitandoNoContactar(true);
@@ -376,12 +400,36 @@ export default function LeadDetallePage() {
                       <MapPin className="h-3.5 w-3.5" strokeWidth={1.75} /> {lead.ciudad}
                     </span>
                   )}
-                  <span className="flex items-center gap-1.5">
-                    <User className="h-3.5 w-3.5" strokeWidth={1.75} />
-                    {lead.vendedorId
-                      ? `Asignado a ${nombresPorId[lead.vendedorId] ?? "vendedor eliminado"}`
-                      : "Sin asignar"}
-                  </span>
+                  {puedeAsignar(usuario?.rol) ? (
+                    <span className="flex items-center gap-1.5">
+                      <User className="h-3.5 w-3.5" strokeWidth={1.75} />
+                      <select
+                        value={lead.vendedorId ?? ""}
+                        onChange={(e) => cambiarVendedor(e.target.value)}
+                        disabled={reasignando}
+                        className="rounded-lg border border-silver-deep/60 bg-surface px-2 py-1 text-sm text-foreground outline-none disabled:opacity-50"
+                      >
+                        <option value="">Sin asignar</option>
+                        {vendedoresActivos.map((v) => (
+                          <option key={v.id} value={v.id}>
+                            {v.nombre}
+                          </option>
+                        ))}
+                        {lead.vendedorId && !vendedoresActivos.some((v) => v.id === lead.vendedorId) && (
+                          <option value={lead.vendedorId}>
+                            {nombresPorId[lead.vendedorId] ?? "vendedor eliminado"}
+                          </option>
+                        )}
+                      </select>
+                    </span>
+                  ) : (
+                    <span className="flex items-center gap-1.5">
+                      <User className="h-3.5 w-3.5" strokeWidth={1.75} />
+                      {lead.vendedorId
+                        ? `Asignado a ${nombresPorId[lead.vendedorId] ?? "vendedor eliminado"}`
+                        : "Sin asignar"}
+                    </span>
+                  )}
                 </div>
               </div>
             </div>
