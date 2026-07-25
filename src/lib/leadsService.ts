@@ -222,6 +222,7 @@ export async function registrarAccionLead(params: {
 
   if (params.tipo === ACCIONES_LEAD.NO_CONTACTAR) {
     await updateDoc(ref, { noContactar: true, actualizadoEn: Timestamp.now() });
+    limpiarCacheOverlays();
   }
   // "Pagó/Renovó" ya no recalcula fechas: el sheet sigue siendo la fuente de
   // verdad de la fecha de inscripción; la renovación se refleja allá.
@@ -263,6 +264,7 @@ export async function actualizarLlamada(
     monto: null,
     creadoEn: Timestamp.now(),
   });
+  limpiarCacheOverlays();
 }
 
 /**
@@ -413,7 +415,7 @@ export async function restarAbono(
       actualizadoEn: Timestamp.now(),
     });
   } else {
-    await updateDoc(ref, { totalAbonado: nuevoTotal, actualizadoEn: Timestamp.now() });
+    await updateDoc(ref, { totalAbonado: increment(-monto), actualizadoEn: Timestamp.now() });
   }
 
   await addDoc(collection(db, "leads", leadId, NOTAS), {
@@ -471,4 +473,5 @@ export async function reasignarLead(leadId: string, vendedorId: string | null) {
     await asegurarOverlay(leadId);
     await updateDoc(ref, { vendedorId, actualizadoEn: Timestamp.now() });
   });
+  limpiarCacheOverlays();
 }

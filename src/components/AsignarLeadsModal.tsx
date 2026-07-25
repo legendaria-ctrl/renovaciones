@@ -38,9 +38,7 @@ export function AsignarLeadsModal({
 
   async function confirmar() {
     setEnviando(true);
-    await onConfirmar(
-      seleccionados.map((v) => ({ vendedorId: v.id, cantidad: Math.max(1, cantidades[v.id] || 1) }))
-    );
+    await onConfirmar(seleccionados.map((v) => ({ vendedorId: v.id, cantidad: Math.max(1, cantidades[v.id] || 0) })));
     setEnviando(false);
   }
 
