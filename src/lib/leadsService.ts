@@ -227,6 +227,25 @@ export async function registrarAccionLead(params: {
   // verdad de la fecha de inscripción; la renovación se refleja allá.
 }
 
+/**
+ * Quita la etiqueta "no contactar" puesta manualmente desde la app. No
+ * aplica a los que vienen marcados "Revocado" en el sheet (columna I) — esa
+ * es la fuente de verdad y no se puede sobreescribir desde acá.
+ */
+export async function quitarNoContactar(leadId: string, autorId: string, autorNombre: string) {
+  const ref = await asegurarOverlay(leadId);
+  await updateDoc(ref, { noContactar: false, actualizadoEn: Timestamp.now() });
+  await addDoc(collection(db, "leads", leadId, NOTAS), {
+    leadId,
+    autorId,
+    autorNombre,
+    tipo: ACCIONES_LEAD.NOTA,
+    texto: "Se quitó la etiqueta de No contactar",
+    creadoEn: Timestamp.now(),
+  });
+  limpiarCacheOverlays();
+}
+
 export async function actualizarLlamada(
   leadId: string,
   estado: EstadoLlamada,

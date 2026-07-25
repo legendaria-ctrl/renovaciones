@@ -16,6 +16,7 @@ import {
   Activity,
   Undo2,
   MessageCircle,
+  X,
 } from "lucide-react";
 import {
   obtenerLead,
@@ -25,6 +26,7 @@ import {
   registrarAbono,
   deshacerAbono,
   restarAbono,
+  quitarNoContactar,
 } from "@/lib/leadsService";
 import { crearSolicitud } from "@/lib/pendientesService";
 import { listarProductosActivos } from "@/lib/productosService";
@@ -88,6 +90,7 @@ export default function LeadDetallePage() {
   const [montoAjuste, setMontoAjuste] = useState(0);
   const [motivoAjuste, setMotivoAjuste] = useState("");
   const [enviandoAjuste, setEnviandoAjuste] = useState(false);
+  const [quitandoNoContactar, setQuitandoNoContactar] = useState(false);
   const [productos, setProductos] = useState<Producto[]>([]);
   const [productoId, setProductoId] = useState("");
 
@@ -281,6 +284,20 @@ export default function LeadDetallePage() {
     }
   }
 
+  async function quitarEtiquetaNoContactar() {
+    if (!usuario || !lead) return;
+    setQuitandoNoContactar(true);
+    setAccionError(null);
+    try {
+      await quitarNoContactar(lead.id, usuario.id, usuario.nombre);
+      await cargar();
+    } catch (err) {
+      setAccionError(err instanceof Error ? err.message : "No se pudo quitar la etiqueta.");
+    } finally {
+      setQuitandoNoContactar(false);
+    }
+  }
+
   async function confirmarAjuste() {
     if (!usuario || !lead || montoAjuste <= 0 || !motivoAjuste.trim()) return;
     setEnviandoAjuste(true);
@@ -380,12 +397,26 @@ export default function LeadDetallePage() {
                 </span>
               )}
               {lead.noContactar && (
-                <span className="rounded-full bg-surface-2 px-3 py-1 text-xs font-medium text-muted">
-                  No quiere ser contactado
+                <span className="flex items-center gap-1.5 rounded-full bg-surface-2 px-3 py-1 text-xs font-medium text-muted">
+                  {lead.revocado ? "Revocado (del sheet)" : "No quiere ser contactado"}
+                  {!lead.revocado && (
+                    <button
+                      onClick={quitarEtiquetaNoContactar}
+                      disabled={quitandoNoContactar}
+                      title="Quitar etiqueta"
+                      className="rounded-full p-0.5 hover:bg-silver-deep/40 disabled:opacity-50"
+                    >
+                      <X className="h-3 w-3" strokeWidth={2} />
+                    </button>
+                  )}
                 </span>
               )}
             </div>
           </div>
+
+          {accionError && !accionAbierta && (
+            <div className="rounded-xl bg-danger/10 px-3 py-2 text-sm text-danger">{accionError}</div>
+          )}
 
           <div className="flex gap-1 rounded-2xl bg-surface-2 p-1">
             {TABS.map(({ valor, label, icon: Icon }) => (
@@ -744,9 +775,6 @@ export default function LeadDetallePage() {
 
           {tab === "ACTIVIDAD" && (
             <div className="flex flex-col gap-3">
-              {accionError && (
-                <div className="rounded-xl bg-danger/10 px-3 py-2 text-sm text-danger">{accionError}</div>
-              )}
               {notas.length === 0 ? (
                 <p className="py-4 text-center text-sm text-muted">Sin actividad registrada.</p>
               ) : (
