@@ -46,6 +46,7 @@ import {
   Moneda,
   EstadoLlamada,
   puedeAsignar,
+  ROLES,
 } from "@/lib/constants";
 import { Lead, NotaLead, Producto, Usuario } from "@/lib/types";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -294,12 +295,20 @@ export default function LeadDetallePage() {
     }
   }
 
-  async function cambiarVendedor(vendedorId: string) {
-    if (!lead) return;
+  async function cambiarVendedor(nuevoVendedorId: string) {
+    if (!lead || !usuario) return;
     setReasignando(true);
     setAccionError(null);
     try {
-      await reasignarLead(lead.id, vendedorId || null);
+      const anteriorNombre = lead.vendedorId ? (nombresPorId[lead.vendedorId] ?? "vendedor eliminado") : "sin asignar";
+      const nuevoNombre = nuevoVendedorId ? (nombresPorId[nuevoVendedorId] ?? "vendedor eliminado") : "sin asignar";
+      await reasignarLead(
+        lead.id,
+        nuevoVendedorId || null,
+        usuario.id,
+        usuario.nombre,
+        `Reasignado de ${anteriorNombre} a ${nuevoNombre}`
+      );
       await cargar();
     } catch (err) {
       setAccionError(err instanceof Error ? err.message : "No se pudo reasignar el lead.");
@@ -351,6 +360,16 @@ export default function LeadDetallePage() {
     );
   }
   if (!lead) return <p className="py-8 text-center text-sm text-muted">Lead no encontrado (id: {id}).</p>;
+  if (usuario?.rol === ROLES.VENDEDOR && lead.vendedorId !== usuario.id) {
+    return (
+      <div className="flex flex-col items-center gap-3 py-8 text-center">
+        <p className="text-sm text-muted">Este lead no está asignado a ti.</p>
+        <button onClick={() => router.push("/")} className="rounded-xl bg-primary px-4 py-2 text-sm font-medium text-white">
+          Volver a mis leads
+        </button>
+      </div>
+    );
+  }
 
   const vencSinergetico = aFecha(lead.vencimientoSinergetico);
   const vencLive = aFecha(lead.vencimientoLive);

@@ -168,12 +168,18 @@ export async function seleccionarLeadsParaAsignar(params: {
 }
 
 /** Búsqueda por correo, teléfono (últimos dígitos) o nombre — todo en memoria. */
-export async function buscarLeads(termino: string): Promise<Lead[]> {
+export async function buscarLeads(termino: string, vendedorId?: string | null): Promise<Lead[]> {
   const valor = termino.trim().toLowerCase();
   if (!valor) return [];
 
   const [sheetLeads, overlays] = await Promise.all([obtenerLeadsDelSheet(), obtenerOverlays()]);
-  const leads = combinarConOverlay(sheetLeads, overlays);
+  let leads = combinarConOverlay(sheetLeads, overlays);
+
+  // Un vendedor solo debe poder encontrar (y por lo tanto abrir) sus propios
+  // leads asignados, aunque el término de búsqueda coincida con otro lead.
+  if (vendedorId) {
+    leads = leads.filter((l) => l.vendedorId === vendedorId);
+  }
 
   const soloDigitos = valor.replace(/\D/g, "");
   const porTelefono = soloDigitos.length >= 7;
@@ -466,12 +472,26 @@ export async function asignarLeadsEnLote(
   return cursor;
 }
 
-export async function reasignarLead(leadId: string, vendedorId: string | null) {
+export async function reasignarLead(
+  leadId: string,
+  vendedorId: string | null,
+  autorId: string,
+  autorNombre: string,
+  texto: string
+) {
   const ref = doc(db, "leads", leadId);
   await updateDoc(ref, { vendedorId, actualizadoEn: Timestamp.now() }).catch(async () => {
     // el overlay puede no existir todavía si el lead nunca se había tocado
     await asegurarOverlay(leadId);
     await updateDoc(ref, { vendedorId, actualizadoEn: Timestamp.now() });
+  });
+  await addDoc(collection(db, "leads", leadId, NOTAS), {
+    leadId,
+    autorId,
+    autorNombre,
+    tipo: ACCIONES_LEAD.REASIGNACION,
+    texto,
+    creadoEn: Timestamp.now(),
   });
   limpiarCacheOverlays();
 }

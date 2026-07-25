@@ -54,7 +54,7 @@ export default function LeadsPage() {
   const cargar = useCallback(async () => {
     setCargando(true);
     if (busqueda.trim()) {
-      const res = await buscarLeads(busqueda);
+      const res = await buscarLeads(busqueda, usuario?.rol === ROLES.VENDEDOR ? usuario.id : null);
       setLeads(res);
       setHayMas(false);
       setTotal(res.length);
