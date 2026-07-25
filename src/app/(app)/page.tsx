@@ -21,17 +21,21 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { AsignarLeadsModal } from "@/components/AsignarLeadsModal";
 import { SeleccionarLeadsModal } from "@/components/SeleccionarLeadsModal";
 
-const TABS: { valor: FiltroMembresia; label: string }[] = [
+type Seccion = FiltroMembresia | "NO_CONTACTAR";
+
+const TABS: { valor: Seccion; label: string }[] = [
   { valor: "TODOS", label: "Todos" },
   { valor: "SINERGETICO", label: "Club Sinergético" },
   { valor: "LIVE", label: "Club Sinergético Live" },
+  { valor: "NO_CONTACTAR", label: "No contactar" },
 ];
 
 export default function LeadsPage() {
   const { usuario } = useSesion();
   const router = useRouter();
 
-  const [membresia, setMembresia] = useState<FiltroMembresia>("TODOS");
+  const [seccion, setSeccion] = useState<Seccion>("TODOS");
+  const membresia: FiltroMembresia = seccion === "NO_CONTACTAR" ? "TODOS" : seccion;
   const [estado, setEstado] = useState<FiltroEstado>("TODOS");
   const [busqueda, setBusqueda] = useState("");
   const [leads, setLeads] = useState<Lead[]>([]);
@@ -61,17 +65,18 @@ export default function LeadsPage() {
       membresia,
       estado,
       vendedorId: usuario?.rol === ROLES.VENDEDOR ? usuario.id : null,
+      soloNoContactar: seccion === "NO_CONTACTAR",
       pagina,
     });
     setLeads(res.leads);
     setHayMas(res.hayMas);
     setTotal(res.total);
     setCargando(false);
-  }, [membresia, estado, busqueda, usuario, pagina]);
+  }, [membresia, estado, seccion, busqueda, usuario, pagina]);
 
   useEffect(() => {
     setPagina(0);
-  }, [membresia, estado, busqueda]);
+  }, [membresia, estado, seccion, busqueda]);
 
   useEffect(() => {
     cargar();
@@ -160,13 +165,13 @@ export default function LeadsPage() {
 
       <div className="shell rounded-[1.75rem] p-2 diffused">
         <div className="core flex flex-col gap-4 rounded-[calc(1.75rem-0.5rem)] p-4">
-          <div className="grid grid-cols-1 gap-2 rounded-2xl bg-surface-2 p-1 sm:grid-cols-3">
+          <div className="grid grid-cols-2 gap-2 rounded-2xl bg-surface-2 p-1 sm:grid-cols-4">
             {TABS.map((tab) => (
               <button
                 key={tab.valor}
-                onClick={() => setMembresia(tab.valor)}
+                onClick={() => setSeccion(tab.valor)}
                 className={`rounded-xl py-2 text-sm font-medium transition-all duration-500 ease-spring ${
-                  membresia === tab.valor
+                  seccion === tab.valor
                     ? "bg-surface text-primary shadow-[0_6px_16px_-6px_rgba(10,92,255,0.35)]"
                     : "text-muted"
                 }`}
@@ -187,7 +192,7 @@ export default function LeadsPage() {
               />
             </div>
 
-            {!busqueda && (
+            {!busqueda && seccion !== "NO_CONTACTAR" && (
               <select
                 value={estado}
                 onChange={(e) => setEstado(e.target.value as FiltroEstado)}
@@ -247,6 +252,11 @@ export default function LeadsPage() {
                           {lead.apartado && (
                             <span className="flex-none rounded-full bg-warning/10 px-2 py-0.5 text-[11px] font-medium text-warning">
                               Apartado
+                            </span>
+                          )}
+                          {lead.noContactar && (
+                            <span className="flex-none rounded-full bg-danger/10 px-2 py-0.5 text-[11px] font-medium text-danger">
+                              No contactar
                             </span>
                           )}
                         </div>

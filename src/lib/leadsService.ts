@@ -34,6 +34,7 @@ export type FiltrosLeads = {
   estado: FiltroEstado;
   vendedorId?: string | null;
   soloSinAsignar?: boolean;
+  soloNoContactar?: boolean;
   vencidoDesde?: Date | null;
   vencidoHasta?: Date | null;
   pagina?: number;
@@ -83,6 +84,10 @@ async function filtrarYOrdenarLeads(filtros: FiltrosLeads): Promise<Lead[]> {
     leads = leads.filter((l) => !l.vendedorId);
   } else if (filtros.vendedorId) {
     leads = leads.filter((l) => l.vendedorId === filtros.vendedorId);
+  }
+
+  if (filtros.soloNoContactar) {
+    leads = leads.filter((l) => l.noContactar);
   }
 
   const ahora = new Date();
