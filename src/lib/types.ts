@@ -14,6 +14,7 @@ export type SheetLead = {
   liveMeses: number | null; // columna J: 3, 6 o 12; null si nunca compró Live
   vencimientoSinergetico: Date; // fechaInscripcion + 1 año
   vencimientoLive: Date | null; // fechaInscripcion + liveMeses
+  revocado: boolean; // columna I dice "Revocado": no se puede contactar ni asignar
 };
 
 /** Lo único que vive en Firestore por lead: solo existe si alguien lo tocó. */

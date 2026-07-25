@@ -50,7 +50,9 @@ function combinarLead(s: SheetLead, o: LeadOverlay): Lead {
     vencimientoLive:
       overrideLive && (!s.vencimientoLive || overrideLive > s.vencimientoLive) ? overrideLive : s.vencimientoLive,
     vendedorId: o.vendedorId ?? null,
-    noContactar: o.noContactar ?? false,
+    // Revocado en el sheet (columna I) cuenta como "no contactar" aunque
+    // nadie lo haya marcado manualmente en la app.
+    noContactar: (o.noContactar ?? false) || s.revocado,
     llamada: o.llamada ?? null,
     apartado: o.apartado ?? false,
     totalAbonado: o.totalAbonado ?? 0,
@@ -161,7 +163,8 @@ export async function seleccionarLeadsParaAsignar(params: {
     vencidoHasta: params.vencidoHasta,
     soloSinAsignar: params.soloSinAsignar,
   });
-  return leads.slice(0, params.cantidad);
+  // Los "no contactar" (incluye revocados del sheet) nunca se asignan.
+  return leads.filter((l) => !l.noContactar).slice(0, params.cantidad);
 }
 
 /** Búsqueda por correo, teléfono (últimos dígitos) o nombre — todo en memoria. */

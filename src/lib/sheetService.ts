@@ -11,6 +11,7 @@ const COL = {
   pais: 3,
   telefono: 4,
   fechaInscripcion: 5,
+  revocado: 8, // columna I: dice "Revocado" cuando no se debe contactar
   liveMeses: 9, // "Tipo de Membresia": "3 Meses" | "6 Meses" | "12 Meses" | ""
   ciudad: 15,
 };
@@ -110,6 +111,7 @@ export async function obtenerLeadsDelSheet(forzar = false): Promise<SheetLead[]>
       vistos.add(clave);
 
       const liveMeses = parsearMeses(fila[COL.liveMeses] ?? "");
+      const revocado = (fila[COL.revocado] ?? "").trim().toLowerCase() === "revocado";
 
       leads.push({
         id: clave,
@@ -123,6 +125,7 @@ export async function obtenerLeadsDelSheet(forzar = false): Promise<SheetLead[]>
         liveMeses,
         vencimientoSinergetico: vencimientoSinergetico(fecha),
         vencimientoLive: liveMeses ? vencimientoLive(fecha, liveMeses) : null,
+        revocado,
       });
     }
 

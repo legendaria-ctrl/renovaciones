@@ -238,8 +238,10 @@ export default function LeadsPage() {
                       <input
                         type="checkbox"
                         checked={seleccionados.has(lead.id)}
+                        disabled={lead.noContactar}
                         onChange={() => toggleSeleccion(lead.id)}
-                        className="h-4 w-4 flex-none accent-primary"
+                        title={lead.noContactar ? "No se puede asignar: marcado como no contactar" : undefined}
+                        className="h-4 w-4 flex-none accent-primary disabled:opacity-30"
                       />
                     )}
                     <button
