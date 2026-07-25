@@ -8,6 +8,7 @@ import { useSidebarDrawer } from "@/lib/sidebar-drawer-context";
 import { usePendientes } from "@/lib/pendientes-context";
 import { puedeAsignar, esAdmin } from "@/lib/constants";
 import {
+  LayoutDashboard,
   LayoutGrid,
   Users,
   Hourglass,
@@ -18,7 +19,10 @@ import {
   BarChart3,
 } from "lucide-react";
 
-const linksBase = [{ href: "/", label: "Leads", icon: LayoutGrid }];
+const linksBase = [
+  { href: "/", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/leads", label: "Leads", icon: LayoutGrid },
+];
 
 const linksCoordinador = [{ href: "/pendientes", label: "Pendientes", icon: Hourglass }];
 

@@ -1,10 +1,38 @@
 "use client";
 
 import { useState } from "react";
+import { Download } from "lucide-react";
 import { listarActividadRango, listarTodaLaActividadRango, resumirPorVendedor, ResumenVendedor } from "@/lib/reportesService";
 import { ACCION_LABEL } from "@/lib/constants";
 import { NotaLead } from "@/lib/types";
 import { aFecha } from "@/lib/membership";
+
+function csvEscapar(valor: string | number): string {
+  const texto = String(valor ?? "");
+  return `"${texto.replace(/"/g, '""')}"`;
+}
+
+function descargarActividadCSV(actividad: NotaLead[], desde: string, hasta: string) {
+  const encabezado = ["Fecha", "Tipo", "Lead", "Autor", "Texto", "Monto", "Moneda", "Deshecho"];
+  const filas = actividad.map((n) => [
+    aFecha(n.creadoEn)?.toLocaleString("es-MX") ?? "",
+    ACCION_LABEL[n.tipo],
+    n.leadId,
+    n.autorNombre,
+    n.texto,
+    n.monto ?? "",
+    n.moneda ?? "",
+    n.deshecho ? "Si" : "No",
+  ]);
+  const csv = [encabezado, ...filas].map((fila) => fila.map(csvEscapar).join(",")).join("\r\n");
+  const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `actividad_${desde}_a_${hasta}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
 
 function hoyISO() {
   return new Date().toISOString().slice(0, 10);
@@ -104,9 +132,17 @@ export default function ReportesPage() {
       {actividad && (
         <div className="shell rounded-[1.75rem] p-2 diffused">
           <div className="core flex flex-col gap-1 rounded-[calc(1.75rem-0.5rem)] p-4">
-            <h2 className="px-2 pb-2 text-sm font-semibold text-foreground">
-              Actividad detallada ({actividad.length})
-            </h2>
+            <div className="flex items-center justify-between px-2 pb-2">
+              <h2 className="text-sm font-semibold text-foreground">Actividad detallada ({actividad.length})</h2>
+              <button
+                onClick={() => descargarActividadCSV(actividad, desde, hasta)}
+                disabled={actividad.length === 0}
+                className="flex items-center gap-1.5 rounded-lg border border-silver-deep/60 bg-surface-2 px-3 py-1.5 text-xs font-medium text-foreground disabled:opacity-50"
+              >
+                <Download className="h-3.5 w-3.5" strokeWidth={1.75} />
+                Descargar CSV
+              </button>
+            </div>
             {actividad.length === 0 ? (
               <p className="py-6 text-center text-sm text-muted">Sin actividad en este rango.</p>
             ) : (

@@ -364,7 +364,7 @@ export default function LeadDetallePage() {
     return (
       <div className="flex flex-col items-center gap-3 py-8 text-center">
         <p className="text-sm text-muted">Este lead no está asignado a ti.</p>
-        <button onClick={() => router.push("/")} className="rounded-xl bg-primary px-4 py-2 text-sm font-medium text-white">
+        <button onClick={() => router.push("/leads")} className="rounded-xl bg-primary px-4 py-2 text-sm font-medium text-white">
           Volver a mis leads
         </button>
       </div>

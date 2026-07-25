@@ -1,336 +1,255 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
-import { Search, UserPlus, RefreshCw, ChevronRight } from "lucide-react";
+import { useEffect, useState } from "react";
 import { useSesion } from "@/lib/session-context";
-import { puedeAsignar, ROLES } from "@/lib/constants";
-import {
-  listarLeads,
-  buscarLeads,
-  asignarLeadsEnLote,
-  FiltroMembresia,
-  FiltroEstado,
-} from "@/lib/leadsService";
-import { listarVendedoresActivos, listarUsuarios } from "@/lib/vendedoresService";
-import { estadoDesdeVencimiento, aFecha, textoVencimiento } from "@/lib/membership";
-import { limpiarCacheSheet } from "@/lib/sheetService";
-import { limpiarCacheOverlays } from "@/lib/overlayService";
-import { Lead, Usuario } from "@/lib/types";
-import { StatusBadge } from "@/components/StatusBadge";
-import { AsignarLeadsModal } from "@/components/AsignarLeadsModal";
-import { SeleccionarLeadsModal } from "@/components/SeleccionarLeadsModal";
+import { puedeAsignar, ROLES, MONEDAS } from "@/lib/constants";
+import { listarLeadsCompletos } from "@/lib/leadsService";
+import { listarVentasAprobadas } from "@/lib/pendientesService";
+import { listarVendedoresYAdminsActivos } from "@/lib/vendedoresService";
+import { Lead, SolicitudAbono, Usuario } from "@/lib/types";
 
-type Seccion = FiltroMembresia | "NO_CONTACTAR";
+type ResumenVendedorDashboard = {
+  vendedorId: string;
+  vendedorNombre: string;
+  leadsAsignados: number;
+  leadsVencidos: number;
+  ventas: number;
+  comisionesPorMoneda: Record<string, number>;
+};
 
-const TABS: { valor: Seccion; label: string }[] = [
-  { valor: "TODOS", label: "Todos" },
-  { valor: "SINERGETICO", label: "Club Sinergético" },
-  { valor: "LIVE", label: "Club Sinergético Live" },
-  { valor: "NO_CONTACTAR", label: "No contactar" },
-];
+function BarraDoble({
+  label,
+  a,
+  b,
+  colorA,
+  colorB,
+  labelA,
+  labelB,
+}: {
+  label: string;
+  a: number;
+  b: number;
+  colorA: string;
+  colorB: string;
+  labelA: string;
+  labelB: string;
+}) {
+  const total = a + b || 1;
+  return (
+    <div className="flex flex-col gap-1.5">
+      <div className="flex items-center justify-between text-xs">
+        <span className="font-medium text-foreground">{label}</span>
+        <span className="text-muted">
+          {a + b} en total
+        </span>
+      </div>
+      <div className="flex h-3 overflow-hidden rounded-full bg-surface-2">
+        <div className={colorA} style={{ width: `${(a / total) * 100}%` }} />
+        <div className={colorB} style={{ width: `${(b / total) * 100}%` }} />
+      </div>
+      <div className="flex items-center gap-4 text-[11px] text-muted">
+        <span className="flex items-center gap-1.5">
+          <span className={`h-2 w-2 rounded-full ${colorA}`} /> {labelA}: {a}
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className={`h-2 w-2 rounded-full ${colorB}`} /> {labelB}: {b}
+        </span>
+      </div>
+    </div>
+  );
+}
 
-export default function LeadsPage() {
+function TarjetaNumero({ label, valor }: { label: string; valor: string | number }) {
+  return (
+    <div className="shell rounded-[1.5rem] p-2 diffused">
+      <div className="core rounded-[calc(1.5rem-0.5rem)] p-4">
+        <p className="text-xs font-medium uppercase tracking-wider text-muted">{label}</p>
+        <p className="mt-1 text-2xl font-semibold text-foreground">{valor}</p>
+      </div>
+    </div>
+  );
+}
+
+export default function DashboardPage() {
   const { usuario } = useSesion();
-  const router = useRouter();
+  const esGlobal = puedeAsignar(usuario?.rol);
 
-  const [seccion, setSeccion] = useState<Seccion>("TODOS");
-  const membresia: FiltroMembresia = seccion === "NO_CONTACTAR" ? "TODOS" : seccion;
-  const [estado, setEstado] = useState<FiltroEstado>("TODOS");
-  const [busqueda, setBusqueda] = useState("");
-  const [leads, setLeads] = useState<Lead[]>([]);
-  const [cargando, setCargando] = useState(true);
-  const [seleccionActiva, setSeleccionActiva] = useState(false);
-  const [seleccionados, setSeleccionados] = useState<Set<string>>(new Set());
-  const [modalAbierto, setModalAbierto] = useState(false);
-  const [modalRangoAbierto, setModalRangoAbierto] = useState(false);
-  const [leadIdsParaAsignar, setLeadIdsParaAsignar] = useState<string[]>([]);
+  const [leads, setLeads] = useState<Lead[] | null>(null);
+  const [ventas, setVentas] = useState<SolicitudAbono[]>([]);
   const [vendedores, setVendedores] = useState<Usuario[]>([]);
-  const [nombresPorId, setNombresPorId] = useState<Record<string, string>>({});
-  const [pagina, setPagina] = useState(0);
-  const [hayMas, setHayMas] = useState(false);
-  const [total, setTotal] = useState(0);
-
-  const cargar = useCallback(async () => {
-    setCargando(true);
-    if (busqueda.trim()) {
-      const res = await buscarLeads(busqueda, usuario?.rol === ROLES.VENDEDOR ? usuario.id : null);
-      setLeads(res);
-      setHayMas(false);
-      setTotal(res.length);
-      setCargando(false);
-      return;
-    }
-    const res = await listarLeads({
-      membresia,
-      estado,
-      vendedorId: usuario?.rol === ROLES.VENDEDOR ? usuario.id : null,
-      soloNoContactar: seccion === "NO_CONTACTAR",
-      pagina,
-    });
-    setLeads(res.leads);
-    setHayMas(res.hayMas);
-    setTotal(res.total);
-    setCargando(false);
-  }, [membresia, estado, seccion, busqueda, usuario, pagina]);
+  const [cargando, setCargando] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    setPagina(0);
-  }, [membresia, estado, seccion, busqueda]);
+    if (!usuario) return;
+    let cancelado = false;
+    (async () => {
+      setCargando(true);
+      setError(null);
+      try {
+        const [todosLosLeads, todasLasVentas, todosLosVendedores] = await Promise.all([
+          listarLeadsCompletos(),
+          esGlobal ? listarVentasAprobadas() : Promise.resolve([]),
+          esGlobal ? listarVendedoresYAdminsActivos() : Promise.resolve([]),
+        ]);
+        if (cancelado) return;
+        setLeads(usuario.rol === ROLES.VENDEDOR ? todosLosLeads.filter((l) => l.vendedorId === usuario.id) : todosLosLeads);
+        setVentas(todasLasVentas);
+        setVendedores(todosLosVendedores);
+      } catch (err) {
+        if (!cancelado) setError(err instanceof Error ? err.message : "No se pudo cargar el dashboard.");
+      } finally {
+        if (!cancelado) setCargando(false);
+      }
+    })();
+    return () => {
+      cancelado = true;
+    };
+  }, [usuario, esGlobal]);
 
-  useEffect(() => {
-    cargar();
-  }, [cargar]);
-
-  async function refrescarDesdeOrigen() {
-    limpiarCacheSheet();
-    limpiarCacheOverlays();
-    setPagina(0);
-    await cargar();
+  if (cargando || !leads) {
+    return <p className="py-8 text-center text-sm text-muted">Cargando…</p>;
+  }
+  if (error) {
+    return (
+      <div className="flex flex-col items-center gap-3 py-8 text-center">
+        <p className="text-sm text-danger">{error}</p>
+      </div>
+    );
   }
 
-  useEffect(() => {
-    if (puedeAsignar(usuario?.rol)) {
-      listarVendedoresActivos().then(setVendedores);
-      listarUsuarios().then((todos) => {
-        const mapa: Record<string, string> = {};
-        for (const u of todos) mapa[u.id] = u.nombre;
-        setNombresPorId(mapa);
-      });
-    }
-  }, [usuario]);
+  const ahora = new Date();
+  const total = leads.length;
+  const vencidosSinergetico = leads.filter((l) => l.vencimientoSinergetico < ahora).length;
+  const activosSinergetico = total - vencidosSinergetico;
 
-  function toggleSeleccion(id: string) {
-    setSeleccionados((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }
+  const conLive = leads.filter((l) => l.liveMeses != null || l.vencimientoLive != null);
+  const vencidosLive = conLive.filter((l) => l.vencimientoLive && l.vencimientoLive < ahora).length;
+  const activosLive = conLive.length - vencidosLive;
+  const sinLive = total - conLive.length;
 
-  async function confirmarAsignacion(asignaciones: { vendedorId: string; cantidad: number }[]) {
-    const ids = leadIdsParaAsignar.length > 0 ? leadIdsParaAsignar : Array.from(seleccionados);
-    await asignarLeadsEnLote(ids, asignaciones);
-    setModalAbierto(false);
-    setSeleccionActiva(false);
-    setSeleccionados(new Set());
-    setLeadIdsParaAsignar([]);
-    cargar();
-  }
+  const sinAsignar = leads.filter((l) => !l.vendedorId).length;
+  const apartados = leads.filter((l) => l.apartado).length;
+  const noContactar = leads.filter((l) => l.noContactar).length;
 
-  function leadsEncontrados(leads: Lead[]) {
-    setLeadIdsParaAsignar(leads.map((l) => l.id));
-    setModalRangoAbierto(false);
-    setModalAbierto(true);
-  }
+  const totalesComisionPorMoneda = ventas.reduce<Record<string, number>>((acc, v) => {
+    const m = v.productoComisionMoneda ?? v.productoMoneda ?? MONEDAS.MXN;
+    acc[m] = (acc[m] ?? 0) + (v.productoComision ?? 0);
+    return acc;
+  }, {});
 
-  const campoVencimiento = membresia === "LIVE" ? "live" : "sinergetico";
+  const resumenVendedores: ResumenVendedorDashboard[] = esGlobal
+    ? vendedores
+        .map((v) => {
+          const leadsDelVendedor = leads.filter((l) => l.vendedorId === v.id);
+          const ventasDelVendedor = ventas.filter((s) => s.vendedorId === v.id);
+          const comisionesPorMoneda = ventasDelVendedor.reduce<Record<string, number>>((acc, s) => {
+            const m = s.productoComisionMoneda ?? s.productoMoneda ?? MONEDAS.MXN;
+            acc[m] = (acc[m] ?? 0) + (s.productoComision ?? 0);
+            return acc;
+          }, {});
+          return {
+            vendedorId: v.id,
+            vendedorNombre: v.nombre,
+            leadsAsignados: leadsDelVendedor.length,
+            leadsVencidos: leadsDelVendedor.filter((l) => l.vencimientoSinergetico < ahora).length,
+            ventas: ventasDelVendedor.length,
+            comisionesPorMoneda,
+          };
+        })
+        .sort((a, b) => b.leadsAsignados - a.leadsAsignados)
+    : [];
+
+  const maxLeadsVendedor = Math.max(1, ...resumenVendedores.map((r) => r.leadsAsignados));
 
   return (
     <div className="flex flex-col gap-5">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-xl font-semibold tracking-tight text-foreground">Leads</h1>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={refrescarDesdeOrigen}
-            title="Refrescar desde el sheet"
-            className="flex h-10 w-10 items-center justify-center rounded-xl border border-silver-deep/60 bg-surface-2 text-muted transition-all duration-500 ease-spring hover:text-foreground active:scale-[0.98]"
-          >
-            <RefreshCw className="h-4 w-4" strokeWidth={1.75} />
-          </button>
-          {puedeAsignar(usuario?.rol) && !seleccionActiva && (
-            <button
-              onClick={() => setModalRangoAbierto(true)}
-              className="flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-medium text-white shadow-[0_10px_24px_-8px_rgba(10,92,255,0.5)] transition-all duration-500 ease-spring active:scale-[0.98]"
-            >
-              <UserPlus className="h-4 w-4" strokeWidth={1.75} />
-              Asignar leads
-            </button>
-          )}
-          {puedeAsignar(usuario?.rol) && (
-            <button
-              onClick={() => setSeleccionActiva((v) => !v)}
-              className={`flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium transition-all duration-500 ease-spring active:scale-[0.98] ${
-                seleccionActiva
-                  ? "bg-surface-2 text-muted"
-                  : "border border-silver-deep/60 bg-surface-2 text-foreground"
-              }`}
-            >
-              {seleccionActiva ? "Cancelar selección" : "Selección manual"}
-            </button>
-          )}
-        </div>
+      <h1 className="text-xl font-semibold tracking-tight text-foreground">
+        Dashboard{!esGlobal && usuario ? ` · ${usuario.nombre}` : ""}
+      </h1>
+
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+        <TarjetaNumero label="Total leads" valor={total.toLocaleString("es-MX")} />
+        <TarjetaNumero label="Vencidos (Sinergético)" valor={vencidosSinergetico.toLocaleString("es-MX")} />
+        <TarjetaNumero label="Vencidos (Live)" valor={vencidosLive.toLocaleString("es-MX")} />
+        {esGlobal && <TarjetaNumero label="Sin asignar" valor={sinAsignar.toLocaleString("es-MX")} />}
+        <TarjetaNumero label="Apartados" valor={apartados.toLocaleString("es-MX")} />
+        <TarjetaNumero label="No contactar" valor={noContactar.toLocaleString("es-MX")} />
       </div>
 
       <div className="shell rounded-[1.75rem] p-2 diffused">
-        <div className="core flex flex-col gap-4 rounded-[calc(1.75rem-0.5rem)] p-4">
-          <div className="grid grid-cols-2 gap-2 rounded-2xl bg-surface-2 p-1 sm:grid-cols-4">
-            {TABS.map((tab) => (
-              <button
-                key={tab.valor}
-                onClick={() => setSeccion(tab.valor)}
-                className={`rounded-xl py-2 text-sm font-medium transition-all duration-500 ease-spring ${
-                  seccion === tab.valor
-                    ? "bg-surface text-primary shadow-[0_6px_16px_-6px_rgba(10,92,255,0.35)]"
-                    : "text-muted"
-                }`}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </div>
-
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-            <div className="flex flex-1 items-center gap-2 rounded-2xl border border-silver-deep/60 bg-surface-2 px-4 py-2.5">
-              <Search className="h-4 w-4 flex-none text-muted" strokeWidth={1.75} />
-              <input
-                value={busqueda}
-                onChange={(e) => setBusqueda(e.target.value)}
-                placeholder="Buscar por nombre, correo o teléfono"
-                className="w-full bg-transparent text-sm text-foreground outline-none placeholder:text-muted/60"
-              />
-            </div>
-
-            {!busqueda && seccion !== "NO_CONTACTAR" && (
-              <select
-                value={estado}
-                onChange={(e) => setEstado(e.target.value as FiltroEstado)}
-                className="rounded-2xl border border-silver-deep/60 bg-surface-2 px-4 py-2.5 text-sm text-foreground outline-none"
-              >
-                <option value="TODOS">Todos los estados</option>
-                <option value="ACTIVO">Activos</option>
-                <option value="VENCIDO">Vencidos</option>
-              </select>
-            )}
-          </div>
-
-          {seleccionActiva && seleccionados.size > 0 && (
-            <div className="flex items-center justify-between rounded-2xl bg-primary-dim px-4 py-3">
-              <span className="text-sm font-medium text-primary">
-                {seleccionados.size} lead{seleccionados.size === 1 ? "" : "s"} seleccionado
-                {seleccionados.size === 1 ? "" : "s"}
-              </span>
-              <button
-                onClick={() => setModalAbierto(true)}
-                className="rounded-xl bg-primary px-4 py-2 text-sm font-medium text-white transition-all duration-500 ease-spring active:scale-[0.98]"
-              >
-                Continuar
-              </button>
-            </div>
-          )}
-
-          <div className="flex flex-col divide-y divide-silver/60">
-            {cargando ? (
-              <p className="py-8 text-center text-sm text-muted">Cargando…</p>
-            ) : leads.length === 0 ? (
-              <p className="py-8 text-center text-sm text-muted">No hay leads con estos filtros.</p>
-            ) : (
-              leads.map((lead) => {
-                const venc = aFecha(
-                  campoVencimiento === "live" ? lead.vencimientoLive : lead.vencimientoSinergetico
-                );
-                const est = estadoDesdeVencimiento(venc);
-
-                return (
-                  <div key={lead.id} className="flex items-center gap-3 py-3">
-                    {seleccionActiva && (
-                      <input
-                        type="checkbox"
-                        checked={seleccionados.has(lead.id)}
-                        disabled={lead.noContactar}
-                        onChange={() => toggleSeleccion(lead.id)}
-                        title={lead.noContactar ? "No se puede asignar: marcado como no contactar" : undefined}
-                        className="h-4 w-4 flex-none accent-primary disabled:opacity-30"
-                      />
-                    )}
-                    <button
-                      onClick={() => !seleccionActiva && router.push(`/leads/${encodeURIComponent(lead.id)}`)}
-                      className="flex min-w-0 flex-1 items-center justify-between gap-3 text-left"
-                    >
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2">
-                          <p className="truncate text-sm font-medium text-foreground">{lead.nombre}</p>
-                          {lead.apartado && (
-                            <span className="flex-none rounded-full bg-warning/10 px-2 py-0.5 text-[11px] font-medium text-warning">
-                              Apartado
-                            </span>
-                          )}
-                          {lead.noContactar && (
-                            <span className="flex-none rounded-full bg-danger/10 px-2 py-0.5 text-[11px] font-medium text-danger">
-                              No contactar
-                            </span>
-                          )}
-                        </div>
-                        <p className="truncate text-xs text-muted">
-                          {lead.correo ?? lead.telefono ?? "sin contacto"}
-                        </p>
-                        {puedeAsignar(usuario?.rol) && (
-                          <p className="truncate text-xs text-muted">
-                            {lead.vendedorId
-                              ? `Asignado a ${nombresPorId[lead.vendedorId] ?? "vendedor eliminado"}`
-                              : "Sin asignar"}
-                          </p>
-                        )}
-                      </div>
-                      <div className="w-28 flex-none truncate text-center text-xs text-muted sm:w-40">
-                        {textoVencimiento(venc)}
-                      </div>
-                      <div className="flex flex-none items-center gap-2">
-                        <StatusBadge estado={est} />
-                        {!seleccionActiva && <ChevronRight className="h-4 w-4 text-muted" strokeWidth={1.75} />}
-                      </div>
-                    </button>
-                  </div>
-                );
-              })
-            )}
-          </div>
-
-          {!busqueda && (leads.length > 0 || pagina > 0) && (
-            <div className="flex items-center justify-between pt-2 text-xs text-muted">
-              <span>{total.toLocaleString("es-MX")} leads con estos filtros</span>
-              <div className="flex gap-2">
-                {pagina > 0 && (
-                  <button
-                    onClick={() => setPagina((p) => Math.max(0, p - 1))}
-                    className="rounded-lg border border-silver-deep/60 bg-surface-2 px-3 py-1.5 font-medium text-foreground"
-                  >
-                    Anterior
-                  </button>
-                )}
-                {hayMas && (
-                  <button
-                    onClick={() => setPagina((p) => p + 1)}
-                    className="rounded-lg border border-silver-deep/60 bg-surface-2 px-3 py-1.5 font-medium text-foreground"
-                  >
-                    Siguiente
-                  </button>
-                )}
-              </div>
-            </div>
-          )}
+        <div className="core flex flex-col gap-5 rounded-[calc(1.75rem-0.5rem)] p-5">
+          <h2 className="text-sm font-semibold text-foreground">Estado de membresías</h2>
+          <BarraDoble
+            label="Club Sinergético"
+            a={activosSinergetico}
+            b={vencidosSinergetico}
+            colorA="bg-success"
+            colorB="bg-danger"
+            labelA="Activos"
+            labelB="Vencidos"
+          />
+          <BarraDoble
+            label="Club Sinergético Live"
+            a={activosLive}
+            b={vencidosLive}
+            colorA="bg-success"
+            colorB="bg-danger"
+            labelA="Activos"
+            labelB="Vencidos"
+          />
+          <p className="text-xs text-muted">{sinLive.toLocaleString("es-MX")} leads nunca compraron Live.</p>
         </div>
       </div>
 
-      {modalRangoAbierto && (
-        <SeleccionarLeadsModal
-          membresia={membresia}
-          onCancelar={() => setModalRangoAbierto(false)}
-          onListo={leadsEncontrados}
-        />
+      {esGlobal && (
+        <div className="shell rounded-[1.75rem] p-2 diffused">
+          <div className="core flex flex-col gap-2 rounded-[calc(1.75rem-0.5rem)] p-5">
+            <h2 className="text-sm font-semibold text-foreground">Ventas y comisiones (histórico)</h2>
+            <p className="text-2xl font-semibold text-foreground">
+              {ventas.length.toLocaleString("es-MX")} <span className="text-sm font-normal text-muted">ventas autorizadas</span>
+            </p>
+            <p className="text-sm text-muted">
+              {Object.entries(totalesComisionPorMoneda)
+                .map(([m, t]) => `$${t.toLocaleString("es-MX")} ${m}`)
+                .join(" · ") || "Sin comisiones registradas todavía."}
+            </p>
+          </div>
+        </div>
       )}
 
-      {modalAbierto && (
-        <AsignarLeadsModal
-          vendedores={vendedores}
-          totalDisponible={leadIdsParaAsignar.length > 0 ? leadIdsParaAsignar.length : seleccionados.size}
-          onCancelar={() => {
-            setModalAbierto(false);
-            setLeadIdsParaAsignar([]);
-          }}
-          onConfirmar={confirmarAsignacion}
-        />
+      {esGlobal && (
+        <div className="shell rounded-[1.75rem] p-2 diffused">
+          <div className="core flex flex-col gap-1 rounded-[calc(1.75rem-0.5rem)] p-5">
+            <h2 className="mb-2 text-sm font-semibold text-foreground">Por vendedor</h2>
+            {resumenVendedores.length === 0 ? (
+              <p className="py-6 text-center text-sm text-muted">No hay vendedores activos.</p>
+            ) : (
+              <div className="flex flex-col divide-y divide-silver/60">
+                {resumenVendedores.map((r) => (
+                  <div key={r.vendedorId} className="flex flex-col gap-1.5 py-3">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="font-medium text-foreground">{r.vendedorNombre}</span>
+                      <span className="text-xs text-muted">
+                        {r.leadsAsignados} leads · {r.leadsVencidos} vencidos · {r.ventas} ventas
+                        {Object.entries(r.comisionesPorMoneda).length > 0 &&
+                          ` · ${Object.entries(r.comisionesPorMoneda)
+                            .map(([m, t]) => `$${t.toLocaleString("es-MX")} ${m}`)
+                            .join(" · ")}`}
+                      </span>
+                    </div>
+                    <div className="h-2 overflow-hidden rounded-full bg-surface-2">
+                      <div
+                        className="h-full rounded-full bg-primary"
+                        style={{ width: `${(r.leadsAsignados / maxLeadsVendedor) * 100}%` }}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
       )}
     </div>
   );

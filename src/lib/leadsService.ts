@@ -167,6 +167,12 @@ export async function seleccionarLeadsParaAsignar(params: {
   return leads.filter((l) => !l.noContactar).slice(0, params.cantidad);
 }
 
+/** Para el Dashboard: todos los leads combinados (sheet + overlay), sin filtrar ni paginar. */
+export async function listarLeadsCompletos(): Promise<Lead[]> {
+  const [sheetLeads, overlays] = await Promise.all([obtenerLeadsDelSheet(), obtenerOverlays()]);
+  return combinarConOverlay(sheetLeads, overlays);
+}
+
 /** Búsqueda por correo, teléfono (últimos dígitos) o nombre — todo en memoria. */
 export async function buscarLeads(termino: string, vendedorId?: string | null): Promise<Lead[]> {
   const valor = termino.trim().toLowerCase();
