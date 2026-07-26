@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { useSesion } from "@/lib/session-context";
 import { useSidebarDrawer } from "@/lib/sidebar-drawer-context";
 import { usePendientes } from "@/lib/pendientes-context";
+import { useAvisos } from "@/lib/avisos-context";
 import { puedeAsignar, esAdmin } from "@/lib/constants";
 import {
   LayoutDashboard,
@@ -17,11 +18,14 @@ import {
   RefreshCw,
   BadgeDollarSign,
   BarChart3,
+  Bell,
+  Megaphone,
 } from "lucide-react";
 
 const linksBase = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/leads", label: "Leads", icon: LayoutGrid },
+  { href: "/notificaciones", label: "Avisos", icon: Bell },
 ];
 
 const linksCoordinador = [{ href: "/pendientes", label: "Pendientes", icon: Hourglass }];
@@ -30,6 +34,7 @@ const linksAdmin = [
   { href: "/vendedores", label: "Equipo", icon: Users },
   { href: "/comisiones", label: "Comisiones", icon: BadgeDollarSign },
   { href: "/reportes", label: "Reportes", icon: BarChart3 },
+  { href: "/avisos", label: "Dar avisos", icon: Megaphone },
   { href: "/importar", label: "Actualizar datos", icon: RefreshCw },
 ];
 
@@ -38,6 +43,7 @@ export function Sidebar() {
   const { usuario, cerrarSesion } = useSesion();
   const { abierto, setAbierto } = useSidebarDrawer();
   const { cantidad } = usePendientes();
+  const { noLeidas } = useAvisos();
 
   const items = [
     ...linksBase,
@@ -73,6 +79,11 @@ export function Sidebar() {
               {href === "/pendientes" && cantidad > 0 && (
                 <span className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-danger px-1.5 text-[11px] font-semibold text-white">
                   {cantidad}
+                </span>
+              )}
+              {href === "/notificaciones" && noLeidas > 0 && (
+                <span className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-danger px-1.5 text-[11px] font-semibold text-white">
+                  {noLeidas}
                 </span>
               )}
             </Link>

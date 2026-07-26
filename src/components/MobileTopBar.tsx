@@ -7,6 +7,7 @@ import { useSidebarDrawer } from "@/lib/sidebar-drawer-context";
 import { usePendientes } from "@/lib/pendientes-context";
 import { puedeAprobar } from "@/lib/constants";
 import { useSesion } from "@/lib/session-context";
+import { AvisosBell } from "@/components/AvisosBell";
 
 export function MobileTopBar() {
   const { setAbierto } = useSidebarDrawer();
@@ -46,6 +47,7 @@ export function MobileTopBar() {
           )}
         </Link>
       )}
+      <AvisosBell />
     </div>
   );
 }
