@@ -138,12 +138,16 @@ export function Sidebar() {
       <aside className="hidden w-full flex-col gap-4 md:sticky md:top-[calc(env(safe-area-inset-top,0px)+2.5rem)] md:flex md:max-h-[calc(100vh-2.5rem-env(safe-area-inset-top,0px)-1.5rem)] md:w-64">
         <Link
           href="/"
-          className="flex h-[84px] w-full flex-none items-center justify-center gap-3 overflow-hidden rounded-[1.5rem] bg-white shadow-[0_10px_24px_-10px_rgba(11,18,32,0.35)] transition-transform duration-500 ease-spring active:scale-[0.98]"
+          className="flex h-[84px] w-full flex-none items-center justify-center overflow-hidden rounded-[1.5rem] bg-white px-4 shadow-[0_10px_24px_-10px_rgba(11,18,32,0.35)] transition-transform duration-500 ease-spring active:scale-[0.98]"
         >
-          <Image src="/renovacion-logo.png" alt="Renovaciones" width={40} height={40} priority className="h-10 w-10" />
-          <span className="text-lg font-semibold tracking-tight text-foreground">
-            Renovaciones<span className="text-primary">.</span>
-          </span>
+          <Image
+            src="/renovacion-logo-full.png"
+            alt="Renovaciones"
+            width={2549}
+            height={828}
+            priority
+            className="h-12 w-auto"
+          />
         </Link>
 
         <div className="shell flex min-h-0 flex-1 flex-col overflow-hidden rounded-[1.75rem] p-2 diffused">

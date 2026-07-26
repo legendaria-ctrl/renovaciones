@@ -92,17 +92,30 @@ export default function LoginPage() {
       className="bg-brand relative flex min-h-[100dvh] w-full items-center justify-center overflow-hidden px-4 pb-16 md:px-12"
       style={{ paddingTop: "calc(env(safe-area-inset-top, 0px) + 4rem)" }}
     >
-      <div className="w-full max-w-md">
-        <div className="mb-8 flex flex-col items-center gap-3 text-center">
-          <Image
-            src="/renovacion-logo.png"
-            alt="Renovaciones"
-            width={72}
-            height={72}
-            priority
-            className="h-16 w-16 drop-shadow-[0_10px_30px_rgba(87,161,255,0.45)]"
-          />
-          <div>
+      <div className="flex w-full max-w-6xl flex-col items-center gap-10 md:flex-row md:items-center md:justify-between md:gap-16">
+        <div className="w-full max-w-md md:flex-none">
+          <div className="mb-10 flex flex-col items-center gap-4 text-center md:hidden">
+            <div className="flex items-center justify-center rounded-[1.5rem] bg-white p-4 shadow-[0_10px_35px_-8px_rgba(10,92,255,0.5)]">
+              <Image
+                src="/renovacion-logo-full.png"
+                alt="Renovaciones"
+                width={2549}
+                height={828}
+                priority
+                className="h-16 w-auto"
+              />
+            </div>
+            <div>
+              <h1 className="text-2xl font-semibold tracking-tight text-white">
+                Renovaciones<span className="text-primary-glow">.</span>
+              </h1>
+              <p className="mt-1 text-sm text-white/70">
+                Elige tu perfil, escribe tu nombre y la clave de acceso.
+              </p>
+            </div>
+          </div>
+
+          <div className="mb-6 hidden md:block">
             <h1 className="text-2xl font-semibold tracking-tight text-white">
               Renovaciones<span className="text-primary-glow">.</span>
             </h1>
@@ -110,17 +123,16 @@ export default function LoginPage() {
               Elige tu perfil, escribe tu nombre y la clave de acceso.
             </p>
           </div>
-        </div>
 
-        {avisoRevocado && (
-          <div className="mb-4 rounded-2xl bg-danger/10 px-4 py-3 text-sm text-danger">
-            Tu acceso fue revocado. Pídele a un administrador o coordinador que te vuelva a aprobar
-            en Equipo.
-          </div>
-        )}
+          {avisoRevocado && (
+            <div className="mb-4 rounded-2xl bg-danger/10 px-4 py-3 text-sm text-danger">
+              Tu acceso fue revocado. Pídele a un administrador o coordinador que te vuelva a
+              aprobar en Equipo.
+            </div>
+          )}
 
-        <form onSubmit={handleSubmit} className="shell rounded-[2rem] p-2 diffused-lg">
-          <div className="core flex flex-col gap-5 rounded-[calc(2rem-0.5rem)] p-8">
+          <form onSubmit={handleSubmit} className="shell rounded-[2rem] p-2 diffused-lg">
+            <div className="core flex flex-col gap-5 rounded-[calc(2rem-0.5rem)] p-8">
             <div className="grid grid-cols-3 gap-2 rounded-2xl bg-surface-2 p-1">
               {OPCIONES_ROL.map(({ rol: r, icon: Icon }) => (
                 <button
@@ -219,6 +231,20 @@ export default function LoginPage() {
             </button>
           </div>
         </form>
+        </div>
+
+        <div className="hidden flex-1 items-center justify-center md:flex">
+          <div className="flex w-full max-w-2xl items-center justify-center rounded-[2rem] bg-white/90 p-10 shadow-[0_20px_50px_rgba(0,0,0,0.35)]">
+            <Image
+              src="/renovacion-logo-full.png"
+              alt="Renovaciones"
+              width={2549}
+              height={828}
+              priority
+              className="h-auto w-full"
+            />
+          </div>
+        </div>
       </div>
     </main>
   );

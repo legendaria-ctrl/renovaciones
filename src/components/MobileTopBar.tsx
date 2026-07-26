@@ -25,12 +25,15 @@ export function MobileTopBar() {
       </button>
       <Link
         href="/"
-        className="flex h-[52px] flex-1 items-center justify-center gap-2 rounded-2xl bg-white shadow-[0_10px_24px_-10px_rgba(11,18,32,0.35)] transition-transform duration-500 ease-spring active:scale-[0.98]"
+        className="flex h-[52px] flex-1 items-center justify-center overflow-hidden rounded-2xl bg-white px-3 shadow-[0_10px_24px_-10px_rgba(11,18,32,0.35)] transition-transform duration-500 ease-spring active:scale-[0.98]"
       >
-        <Image src="/renovacion-logo.png" alt="Renovaciones" width={28} height={28} className="h-7 w-7" />
-        <span className="text-base font-semibold tracking-tight text-foreground">
-          Renovaciones<span className="text-primary">.</span>
-        </span>
+        <Image
+          src="/renovacion-logo-full.png"
+          alt="Renovaciones"
+          width={2549}
+          height={828}
+          className="h-8 w-auto"
+        />
       </Link>
 
       {puedeAprobar(usuario?.rol) && (
