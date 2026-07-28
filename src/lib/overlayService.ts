@@ -53,6 +53,8 @@ const OVERLAY_VACIO: LeadOverlay = {
   productoActualId: null,
   productoActualNombre: null,
   productoActualPrecio: null,
+  invitacionSkoolEnviada: false,
+  invitacionSkoolFecha: null,
 };
 
 /** Crea el overlay la primera vez que alguien toca un lead; si ya existe, solo mergea. */

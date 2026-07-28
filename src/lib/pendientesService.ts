@@ -12,7 +12,13 @@ import {
 import { db } from "./firebase";
 import { SolicitudAbono } from "./types";
 import { ESTADOS_SOLICITUD, ACCIONES_LEAD, TIPOS_SOLICITUD, TipoMembresia, Moneda } from "./constants";
-import { registrarAccionLead, aplicarRenovacionManual, limpiarApartado } from "./leadsService";
+import {
+  registrarAccionLead,
+  aplicarRenovacionManual,
+  limpiarApartado,
+  obtenerLead,
+  enviarInvitacionSkool,
+} from "./leadsService";
 
 const PENDIENTES = "solicitudesAbono";
 
@@ -94,6 +100,17 @@ export async function resolverSolicitud(
     await aplicarRenovacionManual(solicitud.leadId);
     // Ya se pagó completo: deja de estar "apartado" con progreso pendiente.
     await limpiarApartado(solicitud.leadId);
+
+    // Invitación a la comunidad de Skool: no debe tumbar la autorización si
+    // falla (ej. correo repetido en Skool); el pago ya quedó aprobado.
+    try {
+      const lead = await obtenerLead(solicitud.leadId);
+      if (lead?.correo) {
+        await enviarInvitacionSkool(solicitud.leadId, lead.correo, resolutorId, resolutorNombre, false);
+      }
+    } catch {
+      // Ignorar: la autorización ya se guardó, solo falló el aviso a Skool.
+    }
   }
 
   await registrarAccionLead({

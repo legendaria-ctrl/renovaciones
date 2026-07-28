@@ -17,6 +17,8 @@ import {
   Undo2,
   MessageCircle,
   X,
+  Send,
+  CheckCircle2,
 } from "lucide-react";
 import {
   obtenerLead,
@@ -28,6 +30,7 @@ import {
   restarAbono,
   quitarNoContactar,
   reasignarLead,
+  enviarInvitacionSkool,
 } from "@/lib/leadsService";
 import { crearSolicitud } from "@/lib/pendientesService";
 import { listarProductosActivos } from "@/lib/productosService";
@@ -91,6 +94,7 @@ export default function LeadDetallePage() {
   const [nombresPorId, setNombresPorId] = useState<Record<string, string>>({});
   const [vendedoresActivos, setVendedoresActivos] = useState<Usuario[]>([]);
   const [reasignando, setReasignando] = useState(false);
+  const [enviandoInvitacion, setEnviandoInvitacion] = useState(false);
   const [ajusteAbierto, setAjusteAbierto] = useState(false);
   const [montoAjuste, setMontoAjuste] = useState(0);
   const [motivoAjuste, setMotivoAjuste] = useState("");
@@ -314,6 +318,20 @@ export default function LeadDetallePage() {
       setAccionError(err instanceof Error ? err.message : "No se pudo reasignar el lead.");
     } finally {
       setReasignando(false);
+    }
+  }
+
+  async function enviarInvitacion(esReenvio: boolean) {
+    if (!lead || !usuario || !lead.correo) return;
+    setEnviandoInvitacion(true);
+    setAccionError(null);
+    try {
+      await enviarInvitacionSkool(lead.id, lead.correo, usuario.id, usuario.nombre, esReenvio);
+      await cargar();
+    } catch (err) {
+      setAccionError(err instanceof Error ? err.message : "No se pudo enviar la invitación a Skool.");
+    } finally {
+      setEnviandoInvitacion(false);
     }
   }
 
@@ -641,6 +659,36 @@ export default function LeadDetallePage() {
                   </button>
                 )}
               </div>
+
+              {lead.correo && estadoSinergetico === "ACTIVO" && (
+                <div className="flex flex-wrap gap-2">
+                  {!lead.invitacionSkoolEnviada ? (
+                    <button
+                      onClick={() => enviarInvitacion(false)}
+                      disabled={enviandoInvitacion}
+                      className="flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-medium text-white transition-all duration-500 ease-spring active:scale-[0.98] disabled:opacity-50"
+                    >
+                      <Send className="h-4 w-4" strokeWidth={1.75} />
+                      {enviandoInvitacion ? "Enviando…" : "Enviar invitación"}
+                    </button>
+                  ) : (
+                    <>
+                      <span className="flex items-center gap-2 rounded-xl bg-success px-4 py-2.5 text-sm font-medium text-white">
+                        <CheckCircle2 className="h-4 w-4" strokeWidth={1.75} />
+                        Invitación enviada
+                      </span>
+                      <button
+                        onClick={() => enviarInvitacion(true)}
+                        disabled={enviandoInvitacion}
+                        className="flex items-center gap-2 rounded-xl border border-silver-deep/60 bg-surface-2 px-4 py-2.5 text-sm font-medium text-foreground transition-all duration-500 ease-spring active:scale-[0.98] disabled:opacity-50"
+                      >
+                        <Send className="h-4 w-4" strokeWidth={1.75} />
+                        {enviandoInvitacion ? "Enviando…" : "Reenviar invitación"}
+                      </button>
+                    </>
+                  )}
+                </div>
+              )}
 
               {accionAbierta && (
                 <div className="rounded-2xl bg-surface-2 p-4">

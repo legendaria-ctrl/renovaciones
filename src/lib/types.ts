@@ -36,6 +36,10 @@ export type LeadOverlay = {
   productoActualId?: string | null;
   productoActualNombre?: string | null;
   productoActualPrecio?: number | null;
+  // Invitación a la comunidad de Skool (webhook del grupo). Se dispara al
+  // autorizar un pago y también manualmente desde el perfil del lead.
+  invitacionSkoolEnviada?: boolean;
+  invitacionSkoolFecha?: Timestamp | null;
   creadoEn?: Timestamp;
   actualizadoEn?: Timestamp;
 };

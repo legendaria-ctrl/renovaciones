@@ -59,6 +59,8 @@ function combinarLead(s: SheetLead, o: LeadOverlay): Lead {
     productoActualId: o.productoActualId ?? null,
     productoActualNombre: o.productoActualNombre ?? null,
     productoActualPrecio: o.productoActualPrecio ?? null,
+    invitacionSkoolEnviada: o.invitacionSkoolEnviada ?? false,
+    invitacionSkoolFecha: o.invitacionSkoolFecha ?? null,
   };
 }
 
@@ -238,6 +240,50 @@ export async function registrarAccionLead(params: {
   }
   // "Pagó/Renovó" ya no recalcula fechas: el sheet sigue siendo la fuente de
   // verdad de la fecha de inscripción; la renovación se refleja allá.
+}
+
+/**
+ * Dispara el webhook de Skool (vía /api/skool-invite, la URL es secreta y
+ * vive solo en el servidor) y marca el overlay. Se usa tanto para el primer
+ * envío como para "Reenviar invitación" — misma llamada, solo cambia el
+ * texto de la nota. No debe tumbar el flujo que la llama si Skool falla
+ * (ej. correo repetido); quien la llama decide si atrapar el error o no.
+ */
+export async function enviarInvitacionSkool(
+  leadId: string,
+  correo: string,
+  autorId: string,
+  autorNombre: string,
+  esReenvio: boolean
+) {
+  const ref = await asegurarOverlay(leadId);
+
+  const res = await fetch("/api/skool-invite", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ correo }),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => null);
+    throw new Error(data?.error || "No se pudo invitar a Skool");
+  }
+
+  await updateDoc(ref, {
+    invitacionSkoolEnviada: true,
+    invitacionSkoolFecha: Timestamp.now(),
+    actualizadoEn: Timestamp.now(),
+  });
+  await addDoc(collection(db, "leads", leadId, NOTAS), {
+    leadId,
+    autorId,
+    autorNombre,
+    tipo: ACCIONES_LEAD.NOTA,
+    texto: esReenvio
+      ? `Se reenvió la invitación de Skool a ${correo}`
+      : `Invitación de Skool enviada a ${correo}`,
+    creadoEn: Timestamp.now(),
+  });
+  limpiarCacheOverlays();
 }
 
 /**
