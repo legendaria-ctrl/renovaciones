@@ -1,6 +1,6 @@
 {
-  "name": "Renovaciones",
-  "short_name": "Renovaciones",
+  "name": "RenovaBase",
+  "short_name": "RenovaBase",
   "description": "Gestión de renovaciones del Club Sinergético",
   "start_url": "/",
   "display": "standalone",

@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Renovaciones",
+  title: "RenovaBase",
   description: "Gestión de renovaciones del Club Sinergético",
   manifest: "/manifest.json",
   icons: {
@@ -29,7 +29,7 @@ export const metadata: Metadata = {
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "Renovaciones",
+    title: "RenovaBase",
   },
 };
 
